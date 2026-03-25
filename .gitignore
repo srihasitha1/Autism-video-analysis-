@@ -1,0 +1,5 @@
+# Ignore the dataset as requested
+dataset/
+
+# It is good practice to ignore python cache
+__pycache__/
