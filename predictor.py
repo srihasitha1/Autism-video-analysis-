@@ -9,6 +9,7 @@ import tensorflow as tf
 from sklearn.preprocessing import LabelEncoder
 
 from video_loader import extract_single_clip
+from tta import tta_predict
 
 
 def predict_video(
@@ -45,9 +46,15 @@ def predict_video(
     if clip is None:
         return {"error": f"Frame extraction failed: {video_path}"}
 
-    # (T, H, W, 3) → (1, T, H, W, 3)
-    tensor = np.expand_dims(clip, axis=0).astype(np.float32)
-    probs  = model.predict(tensor, verbose=0)[0]
+    # ── TTA or single forward pass ────────────────────────────────────
+    if config.get("use_tta", False):
+        n_aug = config.get("tta_augments", 8)
+        probs = tta_predict(clip, model, n_augments=n_aug)
+        print(f"  [TTA] Averaged {n_aug + 1} predictions")
+    else:
+        # (T, H, W, 3) → (1, T, H, W, 3)
+        tensor = np.expand_dims(clip, axis=0).astype(np.float32)
+        probs  = model.predict(tensor, verbose=0)[0]
 
     pred_idx   = int(np.argmax(probs))
     pred_class = label_encoder.inverse_transform([pred_idx])[0]

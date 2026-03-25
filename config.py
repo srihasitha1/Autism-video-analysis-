@@ -73,4 +73,85 @@ CONFIG = {
     "encoder_save_path":    "label_encoder.pkl",
     "plot_confusion":       "confusion_matrix.png",
     "plot_history":         "training_history.png",
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # IMPROVEMENT 1 — Test-Time Augmentation (TTA)
+    # ══════════════════════════════════════════════════════════════════════════
+    # WHY: The model trains on augmented clips but predicts on a single clean
+    #      clip — a train/test distribution mismatch. TTA averages predictions
+    #      from the same augmentation distribution the model trained on.
+    "use_tta":              True,
+    "tta_augments":         8,       # 8 augmented + 1 original = 9 forward passes
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # IMPROVEMENT 2 — Mixup Augmentation
+    # ══════════════════════════════════════════════════════════════════════════
+    # WHY: Blends random pairs of clips with soft labels. Forces the model to
+    #      learn linear interpolations between classes → smoother decision
+    #      boundary → better generalisation on small datasets.
+    "use_mixup":            True,
+    "mixup_alpha":          0.4,     # Beta(0.4, 0.4) distribution for λ
+    "mixup_lr":             5e-5,    # Fine-tune LR for Mixup (lower than Phase 2)
+    "mixup_finetune_epochs": 20,     # Max epochs for Mixup fine-tuning
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # IMPROVEMENT 3 — Label Smoothing
+    # ══════════════════════════════════════════════════════════════════════════
+    # WHY: Prevents overconfident softmax outputs (1.0 → 0.9 for true class).
+    #      Produces better-calibrated probabilities that generalise more reliably.
+    "label_smoothing":          0.1,
+    "smoothing_lr":             5e-5,    # Fine-tune LR for label smoothing
+    "smoothing_finetune_epochs": 20,     # Max epochs
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # IMPROVEMENT 4 — Discriminative Learning Rates
+    # ══════════════════════════════════════════════════════════════════════════
+    # WHY: A single LR is a compromise — too high for pretrained CNN weights,
+    #      too low for the new GRU head. Discriminative LRs let each group
+    #      update at the rate appropriate for how much it needs to change.
+    "discriminative_lr":        True,
+    "unfreeze_top_layers_p2":   60,      # Unfreeze 60 layers (up from 30)
+    "unfreeze_layers_p3":       60,      # Used by improve.py for improvement 4
+    "lr_head":                  1e-4,    # GRU + Dense head — highest LR
+    "lr_top30":                 2e-5,    # Top 30 MobileNetV2 layers — medium
+    "lr_next30":                5e-6,    # Layers 31–60 from top — lowest LR
+    "disc_lr_head":             1e-4,    # Discriminative LR for head group
+    "disc_lr_top30":            2e-5,    # Discriminative LR for top 30 layers
+    "disc_lr_mid30":            5e-6,    # Discriminative LR for mid 30 layers
+    "disc_finetune_epochs":     20,      # Max epochs for discriminative LR fine-tuning
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # IMPROVEMENT 5 — Cosine Annealing LR Schedule
+    # ══════════════════════════════════════════════════════════════════════════
+    # WHY: ReduceLROnPlateau is reactive — it only reduces when val_loss stops
+    #      improving. Cosine annealing proactively cycles the LR, allowing the
+    #      optimizer to escape shallow local minima and find deeper ones.
+    "use_cosine_annealing":     True,
+    "cosine_initial_lr":        1e-4,    # Starting LR for cosine schedule
+    "cosine_first_decay_epochs": 10,     # First cycle length in epochs
+    "cosine_t_mul":             2.0,     # Each restart cycle is 2× longer
+    "cosine_m_mul":             0.9,     # Peak LR drops by 10% at each restart
+    "cosine_finetune_epochs":   20,      # Max epochs for cosine fine-tuning
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # IMPROVEMENT 6 — Stochastic Weight Averaging (SWA)
+    # ══════════════════════════════════════════════════════════════════════════
+    # WHY: SGD/Adam often land in sharp, narrow minima that generalise poorly.
+    #      SWA averages weights from the last N epochs → flatter minimum →
+    #      better generalisation. Typically adds 0.5–1.5% on small datasets.
+    "use_swa":              True,
+    "swa_epochs":           15,          # Fine-tune epochs for SWA snapshot collection
+    "swa_lr":               1e-5,        # Low constant LR for SWA collection
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # IMPROVEMENT 7 — Optical Flow Dual-Stream
+    # ══════════════════════════════════════════════════════════════════════════
+    # WHY: RGB tells the model what the body looks like. Optical flow explicitly
+    #      encodes how fast and in what direction things move — the kinematic
+    #      signature of each behaviour. Arm flapping has a distinctive oscillating
+    #      flow pattern that is unambiguous even when RGB frames are ambiguous.
+    "use_optical_flow":     False,   # improve.py enables this for improvement 7
+    "flow_height":          64,          # Flow maps are coarse — 64×64 is enough
+    "flow_width":           64,
+    "flow_finetune_epochs": 20,          # Max epochs for dual-stream fine-tuning
 }

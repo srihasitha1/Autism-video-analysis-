@@ -11,9 +11,13 @@ Flow per class folder
       store original
       if augmentation: store augment_clip(clip)   ← in-memory, no disk
 
+When optical flow is enabled (Improvement 7), also computes dense flow fields
+between consecutive frames for each clip, producing a parallel X_flow array.
+
 Returns
 ───────
   X             : (N, T, H, W, 3)   float32  — MobileNetV2-normalised
+  X_flow        : (N, T-1, fH, fW, 2) float32 — optical flow (if enabled, else None)
   y             : (N, num_classes)   float32  — one-hot
   label_encoder : fitted LabelEncoder
   class_weights : {int: float}  for model.fit(class_weight=...)
@@ -33,14 +37,18 @@ from augmentation import augment_clip
 
 def build_dataset(config: dict) -> tuple:
     """
+    Build the full dataset from video folders.
+
     Args:
         config: Global CONFIG dict.
 
     Returns:
-        (X, y, label_encoder, class_weights)
+        (X, X_flow, y, label_encoder, class_weights)
+        X_flow is None if use_optical_flow is False.
     """
-    X_list: list[np.ndarray] = []
-    y_raw:  list[str]        = []
+    X_list:    list[np.ndarray] = []
+    flow_list: list[np.ndarray] = []
+    y_raw:     list[str]        = []
 
     dataset_path    = config["dataset_path"]
     classes         = config["classes"]
@@ -50,12 +58,20 @@ def build_dataset(config: dict) -> tuple:
     exts            = config["supported_extensions"]
     clips_per_video = config.get("clips_per_video", 3)
     use_aug         = config.get("use_augmentation", True)
+    use_flow        = config.get("use_optical_flow", False)
+    flow_h          = config.get("flow_height", 64)
+    flow_w          = config.get("flow_width", 64)
+
+    # Lazy import to avoid overhead when flow is disabled
+    if use_flow:
+        from optical_flow import extract_flow_clip
 
     print("=" * 65)
     print("  Building dataset")
     print(f"  clips_per_video : {clips_per_video}")
     print(f"  augmentation    : {use_aug}")
     print(f"  img resolution  : {h}×{w}")
+    print(f"  optical flow    : {use_flow}  (flow res: {flow_h}×{flow_w})")
     print("=" * 65)
 
     for class_name in classes:
@@ -89,11 +105,20 @@ def build_dataset(config: dict) -> tuple:
                 y_raw.append(class_name)
                 total_samples += 1
 
+                # Compute optical flow for the original clip
+                if use_flow:
+                    flow_list.append(extract_flow_clip(clip, flow_h, flow_w))
+
                 # Store one augmented copy per clip
                 if use_aug:
-                    X_list.append(augment_clip(clip))
+                    aug_clip = augment_clip(clip)
+                    X_list.append(aug_clip)
                     y_raw.append(class_name)
                     total_samples += 1
+
+                    # Compute optical flow for the augmented clip too
+                    if use_flow:
+                        flow_list.append(extract_flow_clip(aug_clip, flow_h, flow_w))
 
         samples_per_video = clips_per_video * (2 if use_aug else 1)
         print(f"    → {total_samples} samples  "
@@ -106,6 +131,12 @@ def build_dataset(config: dict) -> tuple:
         )
 
     X = np.array(X_list, dtype=np.float16)   # (N, T, H, W, 3)
+
+    # Build optical flow array (or None)
+    X_flow = None
+    if use_flow and flow_list:
+        X_flow = np.array(flow_list, dtype=np.float16)  # (N, T-1, fH, fW, 2)
+        print(f"\n  X_flow shape    : {X_flow.shape}  ({X_flow.dtype})")
 
     # ── Label encoding ────────────────────────────────────────────────────
     le    = LabelEncoder()
@@ -133,4 +164,4 @@ def build_dataset(config: dict) -> tuple:
     print(f"  Class weights   : {cw_display}")
     print("=" * 65)
 
-    return X, y, le, class_weights
+    return X, X_flow, y, le, class_weights

@@ -13,11 +13,20 @@ What happens during training
 ─────────────────────────────
 1. Videos loaded → multiple clips extracted in memory (no disk writes)
 2. Augmentation applied (in-memory)
-3. Class weights computed (handles the 54 normal vs ~19 minority imbalance)
-4. MobileNetV2 + GRU model built (pretrained ImageNet weights)
-5. Phase 1: Train GRU head only (CNN frozen, 20 epochs)
-6. Phase 2: Fine-tune top 30 MobileNetV2 layers (40 epochs, LR=1e-4)
-7. Best checkpoint saved, confusion matrix + training plot generated
+3. Optical flow computed (if enabled — Improvement 7)
+4. Class weights computed (handles the 54 normal vs ~19 minority imbalance)
+5. Model built:
+   - Single-stream: MobileNetV2 + GRU (default)
+   - Dual-stream: MobileNetV2 + GRU + Flow CNN + GRU (if optical flow enabled)
+6. Phase 1: Train GRU head only (CNN frozen, 20 epochs)
+7. Phase 2: Fine-tune with improvements:
+   - Mixup on 30% of batches   (Improvement 2)
+   - Label smoothing = 0.1     (Improvement 3)
+   - Discriminative LRs         (Improvement 4)
+   - Cosine annealing schedule  (Improvement 5)
+   - SWA weight averaging       (Improvement 6)
+8. Best checkpoint saved, confusion matrix + training plot generated
+9. SWA model saved separately   (Improvement 6)
 """
 
 import argparse
@@ -27,14 +36,14 @@ import sys
 
 from config          import CONFIG
 from dataset_builder import build_dataset
-from model           import build_transfer_model
+from model           import build_transfer_model, build_dual_stream_model
 from trainer         import train
 from predictor       import load_and_predict
 
 
 def run_training() -> None:
     # ── 1. Build dataset ─────────────────────────────────────────────────
-    X, y, label_encoder, class_weights = build_dataset(CONFIG)
+    X, X_flow, y, label_encoder, class_weights = build_dataset(CONFIG)
 
     # Save encoder for later inference
     enc_path = CONFIG["encoder_save_path"]
@@ -43,42 +52,79 @@ def run_training() -> None:
     print(f"\n  LabelEncoder saved → {enc_path}")
 
     # ── 2. Build model ────────────────────────────────────────────────────
-    model = build_transfer_model(
-        sequence_length=CONFIG["sequence_length"],
-        img_height=CONFIG["img_height"],
-        img_width=CONFIG["img_width"],
-        num_classes=len(CONFIG["classes"]),
-        rnn_units=CONFIG["rnn_units"],
-        dropout_rate=CONFIG["dropout_rate"],
-        l2_reg=CONFIG["l2_reg"],
-        rnn_type=CONFIG["rnn_type"],
-    )
+    use_flow = CONFIG.get("use_optical_flow", False) and X_flow is not None
+
+    if use_flow:
+        print("\n  Building DUAL-STREAM model (RGB + Optical Flow)")
+        model = build_dual_stream_model(
+            sequence_length=CONFIG["sequence_length"],
+            img_height=CONFIG["img_height"],
+            img_width=CONFIG["img_width"],
+            num_classes=len(CONFIG["classes"]),
+            rnn_units=CONFIG["rnn_units"],
+            dropout_rate=CONFIG["dropout_rate"],
+            l2_reg=CONFIG["l2_reg"],
+            rnn_type=CONFIG["rnn_type"],
+            flow_height=CONFIG.get("flow_height", 64),
+            flow_width=CONFIG.get("flow_width", 64),
+        )
+    else:
+        model = build_transfer_model(
+            sequence_length=CONFIG["sequence_length"],
+            img_height=CONFIG["img_height"],
+            img_width=CONFIG["img_width"],
+            num_classes=len(CONFIG["classes"]),
+            rnn_units=CONFIG["rnn_units"],
+            dropout_rate=CONFIG["dropout_rate"],
+            l2_reg=CONFIG["l2_reg"],
+            rnn_type=CONFIG["rnn_type"],
+        )
 
     # ── 3. Two-phase training ─────────────────────────────────────────────
-    train(model, X, y, CONFIG, class_weights=class_weights)
+    train(model, X, y, CONFIG,
+          class_weights=class_weights,
+          X_flow=X_flow if use_flow else None)
+
+    # ── 4. Save final model ───────────────────────────────────────────────
+    # Save as the "final" model with all improvements applied
+    final_path = "autism_final.keras"
+    model.save(final_path)
+    print(f"\n  Final model saved → {final_path}")
+
+    # Also save as SWA model if SWA was used
+    if CONFIG.get("use_swa", False):
+        swa_path = "autism_mobilenet_swa.keras"
+        model.save(swa_path)
+        print(f"  SWA model saved  → {swa_path}")
 
     print("\n" + "═" * 65)
     print("  Training complete.")
-    print(f"  Phase 1 best → {CONFIG['model_save_path'].replace('.keras','_phase1.keras')}")
-    print(f"  Phase 2 best → {CONFIG['model_save_path'].replace('.keras','_phase2.keras')}")
+    print(f"  Final model  → {final_path}")
     print(f"  Encoder      → {CONFIG['encoder_save_path']}")
+    print(f"  Confusion    → confusion_matrix_final.png")
     print("═" * 65)
 
 
 def run_inference(video_path: str) -> None:
-    # Use Phase 2 model if available, fall back to Phase 1
-    p2_path = CONFIG["model_save_path"].replace(".keras", "_phase2.keras")
-    p1_path = CONFIG["model_save_path"].replace(".keras", "_phase1.keras")
+    # Use final model if available, fall back to Phase 1 checkpoint
+    model_candidates = [
+        "autism_final.keras",
+        "autism_mobilenet_swa.keras",
+        "autism_mobilenet_gru_phase1.h5",
+    ]
     enc_path = CONFIG["encoder_save_path"]
 
-    if os.path.exists(p2_path):
-        model_path = p2_path
-    elif os.path.exists(p1_path):
-        model_path = p1_path
-        print("  [NOTE] Phase 2 model not found; using Phase 1.")
-    else:
+    model_path = None
+    for candidate in model_candidates:
+        if os.path.exists(candidate):
+            model_path = candidate
+            break
+
+    if model_path is None:
         print("[ERROR] No trained model found. Run training first: python main.py")
         sys.exit(1)
+
+    print(f"  Using model: {model_path}")
 
     if not os.path.exists(enc_path):
         print(f"[ERROR] Encoder not found: {enc_path}")
