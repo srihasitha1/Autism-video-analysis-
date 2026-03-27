@@ -161,7 +161,7 @@ def build_dataset(config: dict) -> tuple:
     # ── Summary ───────────────────────────────────────────────────────────
     counts = Counter(y_raw)
     print("\n" + "=" * 65)
-    print(f"  Total samples   : {len(X_list)}")
+    print(f"  Total samples   : {len(X)}")
     print(f"  X shape         : {X.shape}  ({X.dtype})")
     print(f"  Pixel range     : [{X.min():.2f}, {X.max():.2f}]  (MobileNetV2: [-1,1])")
     print(f"  Per-class counts: {dict(counts)}")
