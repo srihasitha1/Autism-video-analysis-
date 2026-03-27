@@ -1,5 +1,19 @@
-# Ignore the dataset as requested
+# ── Dataset ────────────────────────────────────────────────────────
 dataset/
 
-# It is good practice to ignore python cache
+# ── Python ─────────────────────────────────────────────────────────
 __pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# ── Generated model artifacts (large binaries, do NOT commit) ──────
+*.h5
+*.keras
+*.pkl
+*.png
+
+# ── OS / Editor ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
