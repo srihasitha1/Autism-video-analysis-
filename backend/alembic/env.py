@@ -8,11 +8,16 @@ Reads DATABASE_URL from environment and targets Base.metadata.
 import asyncio
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+# Load .env file from backend directory
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # ── Import all models so Alembic can see them ───────────────────
 from app.db.base import Base

@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# Node
+node_modules/
+npm-debug.log
+
+# Large media and data files
+*.mp4
+*.avi
+*.mov
+*.mkv
+datasets/
+videos/
+
+# ML model files (mounted as volume at runtime, not baked into image)
+*.h5
+*.keras
+*.pt
+*.pth
+*.pkl
+model/
+
+# Test and debug scripts
+test_*.py
+check_*.py
+create_*.py
+grant_*.sql
+*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

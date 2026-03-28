@@ -6,11 +6,33 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
+# ── Virtual environments ────────────────────────────────────────────
+venv/
+.venv/
+env/
+
 # ── Generated model artifacts (large binaries, do NOT commit) ──────
 *.h5
 *.keras
 *.pkl
 *.png
+
+# ── Node / Frontend build artifacts ────────────────────────────────
+node_modules/
+model/.vite/
+dist/
+build/
+.cache/
+
+# ── Logs / Temporary files ──────────────────────────────────────────
+*.log
+push_error.txt
+*.tmp
+
+# ── Environment & Secrets ───────────────────────────────────────────
+.env
+.env.local
+.env.*.local
 
 # ── OS / Editor ────────────────────────────────────────────────────
 .DS_Store

@@ -16,6 +16,7 @@ from sqlalchemy import (
     Integer,
     String,
     func,
+    ForeignKey,
 )
 from sqlalchemy.dialects.postgresql import JSON, UUID
 
@@ -40,6 +41,14 @@ class AssessmentSession(Base):
         index=True,
     )
 
+    # Link to registered user (nullable for guest sessions)
+    user_uuid = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.user_uuid", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # ── Child info (minimal, non-identifying) ───────────────────
     child_age_months = Column(Integer, nullable=True)
     child_gender = Column(String(20), nullable=True)  # "male"/"female"/"unspecified"
@@ -47,7 +56,9 @@ class AssessmentSession(Base):
     # ── Video analysis results ──────────────────────────────────
     video_class_probabilities = Column(JSON, nullable=True)
     # → {"arm_flapping": 0.72, "spinning": 0.15, "head_banging": 0.08, "normal": 0.65}
-    video_confidence = Column(String(20), nullable=True)  # "high"/"medium"/"low"
+    video_confidence = Column(String(20), nullable=True)  # "high"/"medium"/"low" (legacy)
+    video_confidence_score = Column(Float, nullable=True)  # Numeric confidence 0–1 for dynamic weighting
+    video_variance = Column(Float, nullable=True)  # Prediction variance across clips
     video_score = Column(Float, nullable=True)  # Raw autism score from model (0–1)
     video_error = Column(String(500), nullable=True)  # Error message on failure
     celery_task_id = Column(String(255), nullable=True)  # Celery AsyncResult ID

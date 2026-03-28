@@ -1,0 +1,150 @@
+# AutiSense - Full Stack Docker Compose
+# Run with: docker compose up --build
+
+services:
+  # ───────────────────────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ───────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    container_name: autisense_postgres
+    environment:
+      POSTGRES_DB: autisense
+      POSTGRES_USER: autisense_user
+      POSTGRES_PASSWORD: autisense_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autisense_user -d autisense"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Redis Cache & Message Broker
+  # ───────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: autisense_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Database Migrations (runs once then exits)
+  # ───────────────────────────────────────────────────────────────────────────
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autisense_migrate
+    working_dir: /app
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://autisense_user:autisense_pass@postgres:5432/autisense
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: local-dev-secret-key-change-in-production
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+      MODEL_VIDEO_PATH: model/autism_final.h5
+      MODEL_ENCODER_PATH: ml_models/video_model/label_encoder.pkl
+      MODEL_RF_PATH: ml_models/questionnaire_model/autism_model.pkl
+    volumes:
+      - ./model:/app/model
+    restart: "no"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # FastAPI Backend
+  # ───────────────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autisense_backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql+asyncpg://autisense_user:autisense_pass@postgres:5432/autisense
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: local-dev-secret-key-change-in-production
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+      MODEL_VIDEO_PATH: model/autism_final.h5
+      MODEL_ENCODER_PATH: ml_models/video_model/label_encoder.pkl
+      MODEL_RF_PATH: ml_models/questionnaire_model/autism_model.pkl
+    volumes:
+      - ./backend:/app
+      - ./model:/app/model
+      - video_temp:/tmp/autisense_videos
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Celery Worker (Video Processing)
+  # ───────────────────────────────────────────────────────────────────────────
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autisense_celery
+    command: ["celery", "-A", "celery_worker.celery_app", "worker", "--loglevel=info"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql+asyncpg://autisense_user:autisense_pass@postgres:5432/autisense
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: local-dev-secret-key-change-in-production
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+      MODEL_VIDEO_PATH: model/autism_final.h5
+      MODEL_ENCODER_PATH: ml_models/video_model/label_encoder.pkl
+      MODEL_RF_PATH: ml_models/questionnaire_model/autism_model.pkl
+    volumes:
+      - ./backend:/app
+      - ./model:/app/model
+      - video_temp:/tmp/autisense_videos
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Vite Frontend
+  # ───────────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: autisense_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      VITE_GROQ_API_KEY: ""
+      VITE_GEOAPIFY_API_KEY: ""
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Named Volumes
+# ───────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  video_temp:

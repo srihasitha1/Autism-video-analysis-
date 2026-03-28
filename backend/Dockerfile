@@ -1,28 +1,47 @@
+# AutiSense Backend - Docker Image
+# Python 3.11-slim for bcrypt/passlib compatibility
+
 FROM python:3.11-slim
 
-WORKDIR /app
-
-# System deps for OpenCV, TensorFlow, and general C extensions
+# ── System dependencies ─────────────────────────────────────────────────────
+# Required for psycopg2, OpenCV, and TensorFlow
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx libglib2.0-0 libgomp1 \
+    libpq-dev \
+    gcc \
+    g++ \
+    build-essential \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1 \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# ── Working directory ───────────────────────────────────────────────────────
+WORKDIR /app
+
+# ── Python dependencies ─────────────────────────────────────────────────────
+# Copy requirements first for Docker layer caching
 COPY requirements.txt .
+
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Pin bcrypt to 4.0.1 for passlib 1.7.4 compatibility
+# bcrypt 5.x causes: AttributeError: module 'bcrypt' has no attribute '__about__'
+RUN pip install --no-cache-dir "bcrypt==4.0.1"
+
+# Install tf_keras for loading older Keras models
+RUN pip install --no-cache-dir tf_keras
+
+# ── Application code ─────────────────────────────────────────────────────────
 COPY . .
 
-# Create non-root user for security
-RUN useradd -m -u 1001 autisense \
-    && chown -R autisense:autisense /app
+# ── Environment variables (defaults) ─────────────────────────────────────────
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV ENVIRONMENT=development
 
-USER autisense
-
-# Create temp video directory
-RUN mkdir -p /tmp/autisense_videos
-
-EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# ── Startup command ──────────────────────────────────────────────────────────
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

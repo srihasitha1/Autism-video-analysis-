@@ -25,12 +25,16 @@ from app.config import settings
 from app.db.session import get_db
 from app.models.session import AssessmentSession
 from app.models.user import User
+from app.dependencies import get_current_user, get_optional_user
 from app.schemas.auth import (
     GuestSessionResponse,
     LoginRequest,
     RegisterRequest,
     TokenResponse,
+    UpdateProfileRequest,
+    UserProfileResponse,
 )
+from app.schemas.session import SessionHistoryResponse, SessionHistoryItem
 from app.schemas.session import SessionDeleteResponse, SessionStatusResponse
 from app.services.auth_service import (
     create_access_token,
@@ -125,17 +129,26 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 # ── POST /api/v1/auth/guest ────────────────────────────────────
 @router.post("/guest", response_model=GuestSessionResponse)
-async def create_guest_session(db: AsyncSession = Depends(get_db)):
+async def create_guest_session(
+    user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Create an anonymous assessment session. No authentication required.
-    Returns a session_uuid to track the assessment lifecycle.
+    Create an assessment session.
+    - For authenticated users: links to their account
+    - For guests: creates anonymous session
     """
-    session = AssessmentSession(status="pending")
+    session = AssessmentSession(
+        status="pending",
+        user_uuid=user.user_uuid if user else None,
+    )
     db.add(session)
     await db.commit()
     await db.refresh(session)
 
-    logger.info("Guest session created: %s***", str(session.session_uuid)[:8])
+    logger.info("Session created: %s*** (user=%s)", 
+                str(session.session_uuid)[:8], 
+                str(user.user_uuid)[:8] if user else "guest")
 
     return GuestSessionResponse(
         session_uuid=session.session_uuid,
@@ -212,3 +225,78 @@ async def delete_session(
     logger.info("Session deleted (GDPR): %s***", str(session_uuid)[:8])
 
     return SessionDeleteResponse(session_uuid=session_uuid)
+
+
+# ── GET /api/v1/auth/me ────────────────────────────────────────
+@router.get("/me", response_model=UserProfileResponse)
+async def get_profile(
+    user: User | None = Depends(get_optional_user),
+):
+    """Get current user profile. Works for both authenticated and guest users."""
+    if user:
+        return UserProfileResponse(
+            user_uuid=user.user_uuid,
+            display_name=user.display_name,
+            is_guest=False,
+            created_at=user.created_at,
+        )
+    else:
+        return UserProfileResponse(
+            user_uuid=UUID("00000000-0000-0000-0000-000000000000"),
+            display_name="Guest",
+            is_guest=True,
+            created_at=datetime.now(timezone.utc),
+        )
+
+
+# ── PUT /api/v1/auth/me ────────────────────────────────────────
+@router.put("/me", response_model=UserProfileResponse)
+async def update_profile(
+    body: UpdateProfileRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update user display name."""
+    user.display_name = body.display_name
+    await db.commit()
+    await db.refresh(user)
+    
+    logger.info("User profile updated: %s***", str(user.user_uuid)[:8])
+    
+    return UserProfileResponse(
+        user_uuid=user.user_uuid,
+        display_name=user.display_name,
+        is_guest=False,
+        created_at=user.created_at,
+    )
+
+
+# ── GET /api/v1/auth/sessions ──────────────────────────────────
+@router.get("/sessions", response_model=SessionHistoryResponse)
+async def get_session_history(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get assessment session history for the current user."""
+    result = await db.execute(
+        select(AssessmentSession)
+        .where(AssessmentSession.user_uuid == user.user_uuid)
+        .where(AssessmentSession.status == "complete")
+        .order_by(AssessmentSession.created_at.desc())
+        .limit(50)
+    )
+    sessions = result.scalars().all()
+    
+    return SessionHistoryResponse(
+        sessions=[
+            SessionHistoryItem(
+                session_uuid=s.session_uuid,
+                status=s.status,
+                risk_level=s.risk_level,
+                final_risk_score=s.final_risk_score,
+                created_at=s.created_at,
+            )
+            for s in sessions
+        ],
+        total_count=len(sessions),
+    )

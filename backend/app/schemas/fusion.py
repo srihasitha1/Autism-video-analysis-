@@ -41,6 +41,8 @@ class FuseResponse(BaseModel):
     questionnaire_contribution: str
     weights_used: dict[str, float]           # {"video": 0.5, "questionnaire": 0.5}
     video_fallback_used: bool
+    adjusted_video_confidence: Optional[float] = None  # Confidence after variance adjustment
+    weighting_reasoning: Optional[str] = None          # Explanation for weights chosen
     status: str                              # always "complete"
     disclaimer: str = _DISCLAIMER
 

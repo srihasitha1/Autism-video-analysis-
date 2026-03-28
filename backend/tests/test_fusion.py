@@ -8,6 +8,12 @@ Covers:
   - POST /api/v1/analyze/fuse (normal, fallback, idempotent)
   - GET  /api/v1/analyze/report/{uuid} (gated by complete)
   - GET  /api/v1/analyze/report/{uuid}/summary
+
+DYNAMIC WEIGHTING RULES (updated):
+  - VERY HIGH (≥ 0.85): Video 50%, Questionnaire 50%
+  - HIGH (0.70-0.84):   Video 40%, Questionnaire 60%
+  - MODERATE (0.50-0.69): Video 30%, Questionnaire 70%
+  - LOW (< 0.50):       Video 20%, Questionnaire 80%
 """
 
 import uuid
@@ -51,6 +57,7 @@ async def _setup_session_for_fusion(client, session_uuid: str, has_video: bool =
                 if has_video:
                     session.video_score = 0.6
                     session.video_confidence = "high"
+                    session.video_confidence_score = 0.80  # HIGH tier (0.70-0.84)
                 
                 await db.commit()
             break
@@ -61,53 +68,127 @@ async def _setup_session_for_fusion(client, session_uuid: str, has_video: bool =
 # ═══════════════════════════════════════════════════════════════
 
 
-def test_fusion_high_confidence():
-    """Video confidence 'high' implies weights 0.6/0.4."""
+def test_fusion_very_high_confidence():
+    """Video confidence ≥ 0.85 implies weights 50%/50%."""
     from app.services.fusion_engine import fuse
 
+    res = fuse(
+        questionnaire_probability=0.8,
+        video_prob=0.6,
+        video_confidence=0.90,  # VERY HIGH tier
+        child_age_months=36,
+    )
+    assert res["weights_used"] == {"video": 0.50, "questionnaire": 0.50}
+    # 0.5*0.6 + 0.5*0.8 = 0.30 + 0.40 = 0.70
+    assert res["final_risk_score"] == 0.70
+    assert res["risk_level"] == "medium"
+    assert res["video_fallback_used"] is False
+
+
+def test_fusion_high_confidence():
+    """Video confidence 0.70-0.84 implies weights 40%/60%."""
+    from app.services.fusion_engine import fuse
+
+    res = fuse(
+        questionnaire_probability=0.8,
+        video_prob=0.6,
+        video_confidence=0.80,  # HIGH tier
+        child_age_months=36,
+    )
+    assert res["weights_used"] == {"video": 0.40, "questionnaire": 0.60}
+    # 0.4*0.6 + 0.6*0.8 = 0.24 + 0.48 = 0.72
+    assert res["final_risk_score"] == 0.72
+    assert res["risk_level"] == "high"
+
+
+def test_fusion_moderate_confidence():
+    """Video confidence 0.50-0.69 implies weights 30%/70%."""
+    from app.services.fusion_engine import fuse
+
+    res = fuse(
+        questionnaire_probability=0.8,
+        video_prob=0.6,
+        video_confidence=0.60,  # MODERATE tier
+        child_age_months=36,
+    )
+    assert res["weights_used"] == {"video": 0.30, "questionnaire": 0.70}
+    # 0.3*0.6 + 0.7*0.8 = 0.18 + 0.56 = 0.74
+    assert res["final_risk_score"] == 0.74
+    assert res["risk_level"] == "high"
+
+
+def test_fusion_low_confidence():
+    """Video confidence < 0.50 implies weights 20%/80%."""
+    from app.services.fusion_engine import fuse
+
+    res = fuse(
+        questionnaire_probability=0.8,
+        video_prob=0.6,
+        video_confidence=0.35,  # LOW tier
+        child_age_months=36,
+    )
+    assert res["weights_used"] == {"video": 0.20, "questionnaire": 0.80}
+    # 0.2*0.6 + 0.8*0.8 = 0.12 + 0.64 = 0.76
+    assert res["final_risk_score"] == 0.76
+    assert res["risk_level"] == "high"
+
+
+def test_fusion_legacy_string_confidence():
+    """Legacy string confidence values are converted to numeric."""
+    from app.services.fusion_engine import fuse
+
+    # "high" maps to 0.80 (HIGH tier: 0.70-0.84)
     res = fuse(
         questionnaire_probability=0.8,
         video_prob=0.6,
         video_confidence="high",
         child_age_months=36,
     )
-    assert res["weights_used"] == {"video": 0.6, "questionnaire": 0.4}
-    # 0.6*0.6 + 0.4*0.8 = 0.36 + 0.32 = 0.68
-    assert res["final_risk_score"] == 0.68
-    assert res["risk_level"] == "medium"
-    assert res["video_fallback_used"] is False
-
-
-def test_fusion_medium_confidence():
-    """Video confidence 'medium' implies weights 0.5/0.5."""
-    from app.services.fusion_engine import fuse
-
-    res = fuse(
+    assert res["weights_used"] == {"video": 0.40, "questionnaire": 0.60}
+    
+    # "medium" maps to 0.60 (MODERATE tier: 0.50-0.69)
+    res2 = fuse(
         questionnaire_probability=0.8,
         video_prob=0.6,
         video_confidence="medium",
         child_age_months=36,
     )
-    assert res["weights_used"] == {"video": 0.5, "questionnaire": 0.5}
-    # 0.5*0.6 + 0.5*0.8 = 0.30 + 0.40 = 0.70
-    assert res["final_risk_score"] == 0.70
-    assert res["risk_level"] == "medium"
-
-
-def test_fusion_low_confidence():
-    """Video confidence 'low' implies weights 0.3/0.7."""
-    from app.services.fusion_engine import fuse
-
-    res = fuse(
+    assert res2["weights_used"] == {"video": 0.30, "questionnaire": 0.70}
+    
+    # "low" maps to 0.35 (LOW tier: < 0.50)
+    res3 = fuse(
         questionnaire_probability=0.8,
         video_prob=0.6,
         video_confidence="low",
         child_age_months=36,
     )
-    assert res["weights_used"] == {"video": 0.3, "questionnaire": 0.7}
-    # 0.3*0.6 + 0.7*0.8 = 0.18 + 0.56 = 0.74
-    assert res["final_risk_score"] == 0.74
-    assert res["risk_level"] == "high"
+    assert res3["weights_used"] == {"video": 0.20, "questionnaire": 0.80}
+
+
+def test_fusion_variance_adjustment():
+    """High video variance reduces effective confidence."""
+    from app.services.fusion_engine import fuse
+
+    # Without variance: 0.80 confidence -> HIGH tier (40%/60%)
+    res_no_variance = fuse(
+        questionnaire_probability=0.8,
+        video_prob=0.6,
+        video_confidence=0.80,
+        video_variance=0.05,
+    )
+    assert res_no_variance["weights_used"] == {"video": 0.40, "questionnaire": 0.60}
+    assert res_no_variance["adjusted_video_confidence"] == 0.80
+
+    # With high variance (0.15): confidence reduced by 0.075
+    # 0.80 - 0.075 = 0.725 -> still HIGH tier
+    res_variance = fuse(
+        questionnaire_probability=0.8,
+        video_prob=0.6,
+        video_confidence=0.80,
+        video_variance=0.15,
+    )
+    # Adjusted: 0.80 - min(0.2, 0.15*0.5) = 0.80 - 0.075 = 0.725
+    assert res_variance["adjusted_video_confidence"] < 0.80
 
 
 def test_fusion_age_adjustment():
@@ -117,15 +198,15 @@ def test_fusion_age_adjustment():
     res = fuse(
         questionnaire_probability=0.8,
         video_prob=0.6,
-        video_confidence="high",
+        video_confidence=0.80,  # HIGH -> 40%/60%
         child_age_months=18,  # < 24
     )
-    # High base is 0.6/0.4. Age shifts it to 0.5/0.5.
-    assert res["weights_used"] == {"video": 0.5, "questionnaire": 0.5}
+    # High base is 0.4/0.6. Age shifts it to 0.3/0.7.
+    assert res["weights_used"] == {"video": 0.30, "questionnaire": 0.70}
 
 
 def test_fusion_fallback_missing_video():
-    """Missing video treats as 0.5 prob and low confidence."""
+    """Missing video treats as 0.5 prob and 0.0 confidence (LOW tier)."""
     from app.services.fusion_engine import fuse
 
     res = fuse(
@@ -134,11 +215,11 @@ def test_fusion_fallback_missing_video():
         video_confidence=None,
         child_age_months=36,
     )
-    # Low confidence -> 0.3/0.7
-    assert res["weights_used"] == {"video": 0.3, "questionnaire": 0.7}
+    # LOW confidence -> 20%/80%
+    assert res["weights_used"] == {"video": 0.20, "questionnaire": 0.80}
     assert res["video_fallback_used"] is True
-    # 0.3*0.5 (fallback) + 0.7*0.8 = 0.15 + 0.56 = 0.71
-    assert res["final_risk_score"] == 0.71
+    # 0.2*0.5 (fallback) + 0.8*0.8 = 0.10 + 0.64 = 0.74
+    assert res["final_risk_score"] == 0.74
 
 
 def test_fusion_boundaries():
@@ -156,15 +237,15 @@ def test_fusion_confidence_formula():
     from app.services.fusion_engine import fuse
 
     # Final score = 0.5
-    res1 = fuse(questionnaire_probability=0.5, video_prob=0.5, video_confidence="medium")
+    res1 = fuse(questionnaire_probability=0.5, video_prob=0.5, video_confidence=0.60)
     assert res1["confidence"] == 0.0  # abs(0.5 - 0.5) * 2
 
-    # Final score = 1.0 (assuming weights 0.5/0.5)
-    res2 = fuse(questionnaire_probability=1.0, video_prob=1.0, video_confidence="medium")
+    # Final score = 1.0
+    res2 = fuse(questionnaire_probability=1.0, video_prob=1.0, video_confidence=0.60)
     assert res2["confidence"] == 1.0  # abs(1.0 - 0.5) * 2 = 1.0
 
     # Final score = 0.0
-    res3 = fuse(questionnaire_probability=0.0, video_prob=0.0, video_confidence="medium")
+    res3 = fuse(questionnaire_probability=0.0, video_prob=0.0, video_confidence=0.60)
     assert res3["confidence"] == 1.0  # abs(0.0 - 0.5) * 2 = 1.0
 
 
@@ -172,7 +253,7 @@ def test_fusion_clamp():
     """Ensure final output is clamped [0, 1] even if bad data provided."""
     from app.services.fusion_engine import fuse
 
-    res = fuse(questionnaire_probability=2.0, video_prob=1.5, video_confidence="high")
+    res = fuse(questionnaire_probability=2.0, video_prob=1.5, video_confidence=0.80)
     assert res["final_risk_score"] == 1.0
 
 
@@ -183,6 +264,21 @@ def test_fusion_contribution_labels():
     assert _classify_contribution(0.60) == "high concern"
     assert _classify_contribution(0.35) == "moderate concern"
     assert _classify_contribution(0.34) == "low concern"
+
+
+def test_fusion_weighting_reasoning():
+    """Verify weighting reasoning is included in output."""
+    from app.services.fusion_engine import fuse
+
+    res = fuse(
+        questionnaire_probability=0.8,
+        video_prob=0.6,
+        video_confidence=0.90,  # VERY HIGH tier
+        child_age_months=36,
+    )
+    assert "weighting_reasoning" in res
+    assert "very high" in res["weighting_reasoning"].lower()
+    assert "adjusted_video_confidence" in res
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -223,6 +319,9 @@ async def test_fuse_success_with_video(test_app):
     assert "final_risk_score" in data
     assert "risk_level" in data
     assert data["risk_level"] in ("low", "medium", "high")
+    # New fields should be present
+    assert "adjusted_video_confidence" in data
+    assert "weighting_reasoning" in data
 
 
 @pytest.mark.asyncio

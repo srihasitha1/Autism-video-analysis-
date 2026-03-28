@@ -33,6 +33,7 @@ class User(Base):
     )
     email_hash = Column(String(64), unique=True, nullable=False)  # SHA-256 hex digest
     hashed_password = Column(String(128), nullable=False)  # bcrypt
+    display_name = Column(String(100), nullable=True)  # User-chosen display name
 
     is_active = Column(Boolean, default=True, nullable=False)
 

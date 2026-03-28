@@ -29,7 +29,7 @@ print("✅ Libraries loaded successfully.")
 
 MODEL_PATH = "autism_model.pkl"
 
-def train_and_save_model(csv_path="questionnarie.csv"):
+def train_and_save_model(csv_path="/content/high_accuracy_autism_dataset.csv"):
     """Trains the model on the dataset and saves it to disk."""
     print("🔄 Training model on dataset...")
 
@@ -257,8 +257,6 @@ def display_result(probability, responses, age):
         print()
 
     print("─"*65)
-   11
-
 
 def run_screening(model):
     """Full pipeline: questionnaire → prediction → re4sult."""

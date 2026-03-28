@@ -86,8 +86,9 @@ async def fuse_analysis(
     fusion_result = fuse(
         questionnaire_probability=session.questionnaire_probability,
         video_prob=session.video_score,            # None if no video
-        video_confidence=session.video_confidence, # None if no video
+        video_confidence=session.video_confidence_score,  # Numeric confidence (preferred)
         child_age_months=session.child_age_months, # None if not provided
+        video_variance=session.video_variance,     # For variance-based adjustment
     )
 
     # ── Write results to session ─────────────────────────────────
@@ -116,6 +117,8 @@ async def fuse_analysis(
         questionnaire_contribution=fusion_result["questionnaire_contribution"],
         weights_used=fusion_result["weights_used"],
         video_fallback_used=fusion_result["video_fallback_used"],
+        adjusted_video_confidence=fusion_result.get("adjusted_video_confidence"),
+        weighting_reasoning=fusion_result.get("weighting_reasoning"),
         status="complete",
     )
 
@@ -232,21 +235,24 @@ def _reconstruct_weights(session: AssessmentSession) -> dict[str, float]:
     """
     Reconstruct the weights_used dict for the report.
 
-    We don't store weights in DB (they're always deterministic from
-    video_confidence + child_age_months), so we recompute for display.
-    This is safe because fusion is deterministic.
+    Uses the dynamic weighting logic from fusion_engine based on
+    numeric video confidence score. Falls back to legacy string-based
+    confidence if numeric score is not available.
     """
     from app.services.fusion_engine import (
-        _BASE_WEIGHTS,
+        _select_weights,
+        _normalize_confidence,
         _AGE_SHIFT,
         _YOUNG_CHILD_MONTHS,
     )
 
-    conf = (session.video_confidence or "low").lower()
-    if conf not in _BASE_WEIGHTS:
-        conf = "low"
+    # Prefer numeric confidence score, fall back to legacy string
+    if session.video_confidence_score is not None:
+        confidence = session.video_confidence_score
+    else:
+        confidence = _normalize_confidence(session.video_confidence)
 
-    w_video, w_q = _BASE_WEIGHTS[conf]
+    w_video, w_q, _ = _select_weights(confidence)
 
     if session.child_age_months is not None and session.child_age_months < _YOUNG_CHILD_MONTHS:
         w_q = min(1.0, w_q + _AGE_SHIFT)

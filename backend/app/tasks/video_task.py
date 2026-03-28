@@ -143,6 +143,8 @@ def process_video(self, session_uuid: str) -> dict:
         session.video_class_probabilities = inference_result["video_class_probabilities"]
         session.video_score = inference_result["video_score"]
         session.video_confidence = inference_result["video_confidence"]
+        session.video_confidence_score = inference_result["video_confidence_score"]
+        session.video_variance = inference_result["video_variance"]
         session.risk_level = inference_result["risk_level"]
         session.status = "video_done"
         session.video_error = None
@@ -159,6 +161,8 @@ def process_video(self, session_uuid: str) -> dict:
             "status": "video_done",
             "video_score": inference_result["video_score"],
             "video_confidence": inference_result["video_confidence"],
+            "video_confidence_score": inference_result["video_confidence_score"],
+            "video_variance": inference_result["video_variance"],
             "risk_level": inference_result["risk_level"],
             "clips_evaluated": inference_result["clips_evaluated"],
         }

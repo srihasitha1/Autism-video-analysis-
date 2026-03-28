@@ -12,12 +12,14 @@ Includes:
 
 import logging
 import os
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 
 from app.config import settings
 
@@ -77,6 +79,16 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
+
+    # ── Exception handlers ──────────────────────────────────────
+    @application.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        logger.error("Unhandled exception: %s", exc)
+        logger.error("Traceback: %s", traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(exc), "type": type(exc).__name__},
+        )
 
     # ── Security headers middleware ─────────────────────────────
     @application.middleware("http")

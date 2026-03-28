@@ -38,8 +38,7 @@ httpx==0.28.1
 slowapi==0.1.9
 
 # ── ML: Video model (TensorFlow + OpenCV) ─────────────────────
-tensorflow==2.19.0
-tf_keras==2.19.0
+tensorflow-cpu==2.21.0
 opencv-python-headless==4.11.0.86
 numpy==2.2.5
 

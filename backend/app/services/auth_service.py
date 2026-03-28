@@ -12,6 +12,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 
 from app.config import settings
 from app.models.user import User
@@ -44,6 +45,17 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     )
     to_encode["exp"] = expire
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_token(token: str) -> Optional[dict]:
+    """Decode and validate a JWT token. Returns payload or None (no exception)."""
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        return payload
+    except JWTError:
+        return None
 
 
 def decode_access_token(token: str) -> dict:

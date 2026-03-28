@@ -10,6 +10,7 @@ Design decisions:
   - Calls predict_video_score() from video_score.py directly, bypassing
     analyze_video() which has a hardcoded model path.
   - Maps the raw ML output to the schema expected by our DB.
+  - Computes VIDEO CONFIDENCE based on prediction variance across clips.
 """
 
 import logging
@@ -39,9 +40,22 @@ def _resolve_model_paths() -> tuple[str, str]:
 
 def _ensure_model_dir_on_path():
     """Add the project-root model/ directory to sys.path for ML imports."""
-    # The model/ directory is a sibling of backend/ in the project root
-    project_root = Path(__file__).resolve().parents[3]  # backend/app/services -> project root
-    model_dir = project_root / "model"
+    # Inside Docker, app code lives at /app
+    # Model directory is mounted at /app/model
+    # Check if we're in Docker by looking for /app as the app root
+    current_file = Path(__file__).resolve()
+    
+    # Docker path: /app/app/services/video_inference.py
+    # Local path: .../Autism-video-analysis-/backend/app/services/video_inference.py
+    if current_file.parts[:3] == ("/", "app", "app"):
+        # Running in Docker - use /app directly
+        app_dir = Path("/app")
+        model_dir = app_dir / "model"
+        project_root = app_dir
+    else:
+        # Running locally - calculate from file path
+        project_root = current_file.parents[3]  # backend/app/services -> project root
+        model_dir = project_root / "model"
 
     if str(model_dir) not in sys.path:
         sys.path.insert(0, str(model_dir))
@@ -98,20 +112,48 @@ def _classify_risk(score: float) -> str:
         return "High"
 
 
-def _score_to_confidence(score: float) -> str:
+def _compute_confidence(all_probs: list) -> tuple[float, str]:
     """
-    Map autism score to a confidence qualifier.
-
-    Score near 0 or 1 → high confidence (clear signal)
-    Score near 0.5 → low confidence (ambiguous)
+    Compute video model confidence from prediction variance.
+    
+    CONFIDENCE METRIC:
+    - Low variance across clips → high confidence (model is consistent)
+    - High variance across clips → low confidence (model is uncertain)
+    
+    Uses coefficient of variation (CV) normalized to [0, 1] confidence score.
+    
+    Returns:
+        (numeric_confidence, string_label)
     """
-    distance_from_center = abs(score - 0.5)
-    if distance_from_center > 0.3:
-        return "high"
-    elif distance_from_center > 0.15:
-        return "medium"
+    import numpy as np
+    
+    # Stack all predictions
+    probs_array = np.array(all_probs)  # shape: (n_clips, n_classes)
+    
+    # Compute variance across clips for each class
+    variances = np.var(probs_array, axis=0)
+    mean_variance = np.mean(variances)
+    
+    # Convert variance to confidence:
+    # Low variance (0.0) → confidence 1.0
+    # High variance (0.25+) → confidence approaches 0.0
+    # Using exponential decay: confidence = exp(-k * variance)
+    # k = 8 gives reasonable sensitivity
+    k = 8.0
+    confidence = np.exp(-k * mean_variance)
+    
+    # Clamp to [0, 1]
+    confidence = float(max(0.0, min(1.0, confidence)))
+    
+    # Map to string label for backward compatibility
+    if confidence >= 0.85:
+        label = "high"
+    elif confidence >= 0.70:
+        label = "medium"
     else:
-        return "low"
+        label = "low"
+    
+    return confidence, label
 
 
 def run_inference(video_path: str) -> dict[str, Any]:
@@ -127,7 +169,9 @@ def run_inference(video_path: str) -> dict[str, Any]:
         dict with keys:
           - video_class_probabilities: {class_name: float}
           - video_score: float (0–1, composite autism score)
-          - video_confidence: str ("high"/"medium"/"low")
+          - video_confidence: str ("high"/"medium"/"low") — legacy
+          - video_confidence_score: float (0–1) — numeric for fusion
+          - video_variance: float — prediction variance across clips
           - risk_level: str ("Low"/"Moderate"/"High")
           - clips_evaluated: int
 
@@ -168,7 +212,6 @@ def run_inference(video_path: str) -> dict[str, Any]:
     # A 13-second video produces 99+ clips with sliding window — cap at 10.
     MAX_CLIPS = 10
     if len(clips) > MAX_CLIPS:
-        import numpy as np
         original_count = len(clips)
         indices = np.linspace(0, len(clips) - 1, MAX_CLIPS, dtype=int)
         clips = [clips[i] for i in indices]
@@ -190,6 +233,13 @@ def run_inference(video_path: str) -> dict[str, Any]:
     # ── Average predictions across clips ────────────────────────
     avg_probs = np.mean(all_probs, axis=0)
 
+    # ── Compute confidence from variance ─────────────────────────
+    confidence_score, confidence_label = _compute_confidence(all_probs)
+    
+    # Compute variance for fusion engine (optional adjustment)
+    probs_array = np.array(all_probs)
+    video_variance = float(np.mean(np.var(probs_array, axis=0)))
+
     # ── Build probability dict ──────────────────────────────────
     labels = encoder.classes_
     prob_dict = {label: float(round(p, 4)) for label, p in zip(labels, avg_probs)}
@@ -203,17 +253,18 @@ def run_inference(video_path: str) -> dict[str, Any]:
     autism_score = float(round(autism_score, 4))
 
     risk_level = _classify_risk(autism_score)
-    confidence = _score_to_confidence(autism_score)
 
     logger.info(
-        "Inference complete: score=%.4f risk=%s confidence=%s clips=%d",
-        autism_score, risk_level, confidence, len(clips),
+        "Inference complete: score=%.4f risk=%s confidence=%.4f (%s) clips=%d variance=%.4f",
+        autism_score, risk_level, confidence_score, confidence_label, len(clips), video_variance,
     )
 
     return {
         "video_class_probabilities": prob_dict,
         "video_score": autism_score,
-        "video_confidence": confidence,
+        "video_confidence": confidence_label,
+        "video_confidence_score": confidence_score,
+        "video_variance": video_variance,
         "risk_level": risk_level,
         "clips_evaluated": len(clips),
     }
