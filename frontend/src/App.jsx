@@ -14,10 +14,26 @@ const AccentText = "text-[#2ECC71]";
 export default function AutiSenseApp() {
   const [currentScreen, setCurrentScreen] = useState('login');
   const [assessmentStatus, setAssessmentStatus] = useState({ video: false, questionnaire: false });
+  const [sessionUUID, setSessionUUID] = useState(null);
+  const [authToken, setAuthToken] = useState(null);
   
   // Navigation helper
   const navigateTo = (screen) => setCurrentScreen(screen);
   const markComplete = (task) => setAssessmentStatus(prev => ({ ...prev, [task]: true }));
+
+  // Create a guest session and store the UUID
+  const createGuestSession = async () => {
+    try {
+      const res = await fetch('/api/v1/auth/guest', { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to create session');
+      const data = await res.json();
+      setSessionUUID(data.session_uuid);
+      return data.session_uuid;
+    } catch (err) {
+      console.error('Session creation failed:', err);
+      return null;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center font-sans" style={{ fontFamily: "'DM Sans', sans-serif" }}>
@@ -37,15 +53,15 @@ export default function AutiSenseApp() {
         
         {/* Content Area */}
         <div className={`flex-1 relative h-screen overflow-hidden flex flex-col ${['home', 'assessment_hub', 'results', 'clinics', 'history', 'profile'].includes(currentScreen) ? 'md:w-[calc(100%-16rem)]' : 'w-full'}`}>
-          {currentScreen === 'login' && <LoginScreen onNavigate={navigateTo} />}
+          {currentScreen === 'login' && <LoginScreen onNavigate={navigateTo} createGuestSession={createGuestSession} setAuthToken={setAuthToken} />}
           {currentScreen === 'home' && <HomeScreen onNavigate={navigateTo} />}
           {currentScreen === 'assessment_hub' && <AssessmentHubScreen onNavigate={navigateTo} status={assessmentStatus} />}
-          {currentScreen === 'video_analysis' && <VideoAnalysisScreen onNavigate={navigateTo} onComplete={() => markComplete('video')} />}
-          {currentScreen === 'questionnaire' && <QuestionnaireScreen onNavigate={navigateTo} onComplete={() => markComplete('questionnaire')} />}
-          {currentScreen === 'results' && <ResultsScreen onNavigate={navigateTo} />}
+          {currentScreen === 'video_analysis' && <VideoAnalysisScreen onNavigate={navigateTo} onComplete={() => markComplete('video')} sessionUUID={sessionUUID} />}
+          {currentScreen === 'questionnaire' && <QuestionnaireScreen onNavigate={navigateTo} onComplete={() => markComplete('questionnaire')} sessionUUID={sessionUUID} />}
+          {currentScreen === 'results' && <ResultsScreen onNavigate={navigateTo} sessionUUID={sessionUUID} />}
           {currentScreen === 'chatbot' && <ChatbotScreen onNavigate={navigateTo} />}
           {currentScreen === 'clinics' && <ClinicsScreen onNavigate={navigateTo} />}
-          {currentScreen === 'create_account' && <CreateAccountScreen onNavigate={navigateTo} />}
+          {currentScreen === 'create_account' && <CreateAccountScreen onNavigate={navigateTo} createGuestSession={createGuestSession} setAuthToken={setAuthToken} />}
           {currentScreen === 'history' && <HistoryScreen onNavigate={navigateTo} />}
           {currentScreen === 'profile' && <ProfileScreen onNavigate={navigateTo} />}
         </div>
@@ -57,7 +73,43 @@ export default function AutiSenseApp() {
 // ---------------------------------------------------------
 // 1. LOGIN / WELCOME SCREEN
 // ---------------------------------------------------------
-function LoginScreen({ onNavigate }) {
+function LoginScreen({ onNavigate, createGuestSession, setAuthToken }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLogin = async () => {
+    if (!email || !password) { setError('Please enter email and password'); return; }
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || 'Invalid credentials');
+      }
+      const data = await res.json();
+      setAuthToken(data.access_token);
+      // Also create an assessment session for this logged-in user
+      await createGuestSession();
+      onNavigate('home');
+    } catch (err) {
+      setError(err.message);
+    } finally { setLoading(false); }
+  };
+
+  const handleGuest = async () => {
+    setLoading(true); setError('');
+    const uuid = await createGuestSession();
+    setLoading(false);
+    if (uuid) { onNavigate('home'); }
+    else { setError('Could not connect to server. Is the backend running?'); }
+  };
+
   return (
     <div className="flex-1 bg-gradient-to-br from-teal-50 to-white relative flex flex-col overflow-y-auto overflow-x-hidden w-full h-full">
       {/* Background shape */}
@@ -74,12 +126,20 @@ function LoginScreen({ onNavigate }) {
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">AutiSense</h1>
           <p className="text-gray-500 font-medium mb-10 text-center">Early awareness. Better futures.</p>
 
+          {error && (
+            <div className="w-full bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl mb-4 font-medium">
+              {error}
+            </div>
+          )}
+
           <div className="w-full space-y-4 mb-8">
             <div className="relative">
               <User className="absolute left-4 top-3.5 w-5 h-5 text-gray-400" />
               <input
                 type="email"
                 placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-white/80 border border-gray-200 rounded-2xl py-3.5 pl-12 pr-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A9E7A] focus:bg-white transition-all shadow-sm"
               />
             </div>
@@ -90,6 +150,8 @@ function LoginScreen({ onNavigate }) {
               <input
                 type="password"
                 placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-white/80 border border-gray-200 rounded-2xl py-3.5 pl-12 pr-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A9E7A] focus:bg-white transition-all shadow-sm"
               />
             </div>
@@ -99,10 +161,11 @@ function LoginScreen({ onNavigate }) {
           </div>
 
           <button
-            onClick={() => onNavigate('home')}
-            className="w-full bg-[#1A9E7A] hover:bg-teal-700 text-white font-bold py-4 rounded-full shadow-lg shadow-teal-200 hover:shadow-xl transition-all mb-4 text-lg"
+            onClick={handleLogin}
+            disabled={loading}
+            className="w-full bg-[#1A9E7A] hover:bg-teal-700 text-white font-bold py-4 rounded-full shadow-lg shadow-teal-200 hover:shadow-xl transition-all mb-4 text-lg disabled:opacity-50"
           >
-            Sign In
+            {loading ? 'Connecting...' : 'Sign In'}
           </button>
 
           <button 
@@ -112,10 +175,11 @@ function LoginScreen({ onNavigate }) {
             Create Account
           </button>
           <button
-            onClick={() => onNavigate('home')}
-            className="w-full text-gray-500 font-bold py-3.5 rounded-full hover:bg-gray-50 transition-all text-sm border-2 border-transparent"
+            onClick={handleGuest}
+            disabled={loading}
+            className="w-full text-gray-500 font-bold py-3.5 rounded-full hover:bg-gray-50 transition-all text-sm border-2 border-transparent disabled:opacity-50"
           >
-            Continue as Guest
+            {loading ? 'Creating session...' : 'Continue as Guest'}
           </button>
         </div>
         
@@ -256,27 +320,26 @@ function AssessmentHubScreen({ onNavigate, status }) {
 // ---------------------------------------------------------
 // 2.6 VIDEO ANALYSIS SCREEN
 // ---------------------------------------------------------
-function VideoAnalysisScreen({ onNavigate, onComplete }) {
+function VideoAnalysisScreen({ onNavigate, onComplete, sessionUUID }) {
   const [recording, setRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [statusMsg, setStatusMsg] = useState('');
+  const [error, setError] = useState('');
 
+  // Fake progress for recording (camera not implemented)
   useEffect(() => {
-    if (recording || uploading) {
+    if (recording) {
       const interval = setInterval(() => {
         setProgress(p => {
-          if (p >= 100) {
-            clearInterval(interval);
-            setRecording(false);
-            setUploading(false);
-            return 100;
-          }
+          if (p >= 100) { clearInterval(interval); setRecording(false); return 100; }
           return p + 2;
         });
       }, 100);
       return () => clearInterval(interval);
     }
-  }, [recording, uploading]);
+  }, [recording]);
 
   const handleFinish = () => {
     onComplete();
@@ -284,9 +347,65 @@ function VideoAnalysisScreen({ onNavigate, onComplete }) {
   };
 
   const fileInputRef = useRef(null);
-  const handleFileUpload = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setUploading(true);
+
+  const handleFileUpload = async (e) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    setUploading(true); setError(''); setProgress(20); setStatusMsg('Uploading video...');
+
+    try {
+      // Step 1: Upload the file
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('session_uuid', sessionUUID);
+      const uploadRes = await fetch('/api/v1/video/upload', { method: 'POST', body: formData });
+      if (!uploadRes.ok) {
+        const d = await uploadRes.json().catch(() => ({}));
+        throw new Error(d.detail || 'Upload failed');
+      }
+      setProgress(40); setStatusMsg('Starting analysis...');
+
+      // Step 2: Start analysis
+      const startRes = await fetch('/api/v1/analyze/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_uuid: sessionUUID }),
+      });
+      if (!startRes.ok) {
+        const d = await startRes.json().catch(() => ({}));
+        throw new Error(d.detail || 'Could not start analysis');
+      }
+      setUploading(false); setAnalyzing(true); setProgress(60); setStatusMsg('Analyzing behavior...');
+
+      // Step 3: Poll status every 2s
+      let attempts = 0;
+      const maxAttempts = 60;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const statusRes = await fetch(`/api/v1/analyze/status/${sessionUUID}`);
+          const statusData = await statusRes.json();
+
+          if (statusData.status === 'video_done') {
+            clearInterval(poll);
+            setProgress(100); setAnalyzing(false); setStatusMsg('Analysis complete!');
+          } else if (statusData.status === 'error_video') {
+            clearInterval(poll);
+            throw new Error(statusData.error || 'Video analysis failed');
+          } else {
+            setProgress(Math.min(90, 60 + attempts));
+          }
+        } catch (err) {
+          clearInterval(poll);
+          setError(err.message); setAnalyzing(false);
+        }
+        if (attempts >= maxAttempts) {
+          clearInterval(poll);
+          setError('Analysis timed out. Please try again.'); setAnalyzing(false);
+        }
+      }, 2000);
+    } catch (err) {
+      setError(err.message); setUploading(false); setAnalyzing(false);
     }
   };
 
@@ -305,17 +424,26 @@ function VideoAnalysisScreen({ onNavigate, onComplete }) {
           <User className="w-32 h-32 text-gray-700 opacity-50" />
         </div>
         
-        {/* Recording / Uploading Overlay */}
-        {(recording || uploading) && (
+        {/* Status Overlay */}
+        {(recording || uploading || analyzing) && (
           <div className="absolute top-24 right-6 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full z-20">
-            <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${uploading ? 'bg-blue-500' : 'bg-red-500'}`}></div>
-            <span className={`font-mono text-sm font-bold ${uploading ? 'text-blue-500' : 'text-red-500'}`}>{uploading ? 'UPLOADING' : 'REC'}</span>
+            <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${uploading || analyzing ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+            <span className={`font-mono text-sm font-bold ${uploading || analyzing ? 'text-blue-500' : 'text-red-500'}`}>
+              {statusMsg || (uploading ? 'UPLOADING' : analyzing ? 'ANALYZING' : 'REC')}
+            </span>
+          </div>
+        )}
+
+        {/* Error overlay */}
+        {error && (
+          <div className="absolute top-24 left-6 right-6 bg-red-500/90 text-white px-4 py-3 rounded-xl z-20 text-sm font-medium">
+            {error}
           </div>
         )}
 
         {/* Alignment Guide */}
         <div className="w-64 h-80 border-2 border-dashed border-white/30 rounded-full absolute z-10 flex items-center justify-center pointer-events-none">
-          {!recording && !uploading && progress === 0 && <span className="text-white/50 text-xs font-bold uppercase tracking-widest absolute bottom-4">Align Face Here</span>}
+          {!recording && !uploading && !analyzing && progress === 0 && <span className="text-white/50 text-xs font-bold uppercase tracking-widest absolute bottom-4">Align Face Here</span>}
         </div>
       </div>
 
@@ -323,7 +451,7 @@ function VideoAnalysisScreen({ onNavigate, onComplete }) {
       <div className="bg-black pb-10 pt-6 px-6 relative z-20 md:max-w-4xl md:mx-auto md:w-full">
         {progress > 0 && progress < 100 && (
           <div className="w-full bg-gray-800 h-1.5 rounded-full mb-6 overflow-hidden">
-            <div className={`h-full ${uploading ? 'bg-blue-500' : 'bg-red-500'}`} style={{ width: `${progress}%` }}></div>
+            <div className={`h-full ${uploading || analyzing ? 'bg-blue-500' : 'bg-red-500'} transition-all duration-300`} style={{ width: `${progress}%` }}></div>
           </div>
         )}
         
@@ -336,13 +464,13 @@ function VideoAnalysisScreen({ onNavigate, onComplete }) {
             <>
               <button 
                 onClick={() => setRecording(true)} 
-                disabled={recording || uploading}
-                className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all ${recording ? 'scale-90 opacity-80' : 'hover:scale-105'} ${(recording || uploading) ? 'opacity-50' : ''}`}
+                disabled={recording || uploading || analyzing}
+                className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all ${recording ? 'scale-90 opacity-80' : 'hover:scale-105'} ${(recording || uploading || analyzing) ? 'opacity-50' : ''}`}
               >
                 <div className={`w-16 h-16 rounded-full transition-all ${recording ? 'bg-red-500 rounded-lg scale-50' : 'bg-red-500'}`}></div>
               </button>
               
-              {(!recording && !uploading) && (
+              {(!recording && !uploading && !analyzing) && (
                 <div className="flex flex-col items-center">
                   <span className="text-gray-500 text-xs font-bold mb-2">OR</span>
                   <input type="file" accept="video/*" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
@@ -354,18 +482,21 @@ function VideoAnalysisScreen({ onNavigate, onComplete }) {
             </>
           )}
         </div>
-        {!uploading && !recording && progress === 0 && <p className="text-center text-gray-500 text-xs mt-6">Ensure good lighting and capture child's natural play.</p>}
+        {!uploading && !recording && !analyzing && progress === 0 && <p className="text-center text-gray-500 text-xs mt-6">Ensure good lighting and capture child's natural play.</p>}
       </div>
     </div>
   );
 }
 
+
 // ---------------------------------------------------------
 // 3. QUESTIONNAIRE SCREEN
 // ---------------------------------------------------------
-function QuestionnaireScreen({ onNavigate, onComplete }) {
+function QuestionnaireScreen({ onNavigate, onComplete, sessionUUID }) {
   const [expandedSection, setExpandedSection] = useState(0);
   const [answers, setAnswers] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const sections = [
     { title: "Social Interaction", count: 10 },
@@ -518,12 +649,43 @@ function QuestionnaireScreen({ onNavigate, onComplete }) {
 
       {/* Bottom Action Area */}
       <div className="absolute bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 pt-4 pb-8 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] md:max-w-4xl md:left-1/2 md:-translate-x-1/2 z-20">
+        {error && (
+          <div className="w-full bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2 rounded-xl mb-3 font-medium">{error}</div>
+        )}
         <button
-          onClick={() => {
-            onComplete();
-            onNavigate('assessment_hub');
+          onClick={async () => {
+            if (answeredCount < 40) { setError('Please answer all 40 questions'); return; }
+            setSubmitting(true); setError('');
+            try {
+              // Flatten answers object to ordered array of 40 ints
+              const responses = [];
+              for (let s = 0; s < 4; s++) {
+                for (let q = 0; q < 10; q++) {
+                  responses.push(answers[`${s}-${q}`] ?? 0);
+                }
+              }
+              const res = await fetch('/api/v1/analyze/questionnaire', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  session_uuid: sessionUUID,
+                  responses,
+                  child_age_months: 36,
+                  child_gender: 'unspecified',
+                }),
+              });
+              if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                throw new Error(d.detail || 'Submission failed');
+              }
+              onComplete();
+              onNavigate('assessment_hub');
+            } catch (err) {
+              setError(err.message);
+            } finally { setSubmitting(false); }
           }}
-          className="w-full bg-[#2ECC71] hover:bg-green-500 text-white font-bold py-4 rounded-full shadow-lg shadow-green-200 transition-all text-lg"
+          disabled={submitting || answeredCount < 40}
+          className={`w-full font-bold py-4 rounded-full shadow-lg transition-all text-lg ${answeredCount < 40 ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-[#2ECC71] hover:bg-green-500 text-white shadow-green-200'} disabled:opacity-60`}
         >
           Submit Answers
         </button>
@@ -532,24 +694,81 @@ function QuestionnaireScreen({ onNavigate, onComplete }) {
   );
 }
 
-// ---------------------------------------------------------
-// 4. RISK REPORT / RESULTS SCREEN
-// ---------------------------------------------------------
-function ResultsScreen({ onNavigate }) {
-  const riskValue = 72; // e.g. 72%
+function ResultsScreen({ onNavigate, sessionUUID }) {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!sessionUUID) { setError('No session found'); setLoading(false); return; }
+    const loadReport = async () => {
+      try {
+        // Step 1: Run fusion
+        await fetch('/api/v1/analyze/fuse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_uuid: sessionUUID }),
+        });
+        // Step 2: Fetch full report
+        const res = await fetch(`/api/v1/analyze/report/${sessionUUID}`);
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.detail || 'Could not load report');
+        }
+        const data = await res.json();
+        setReport(data);
+      } catch (err) {
+        setError(err.message);
+      } finally { setLoading(false); }
+    };
+    loadReport();
+  }, [sessionUUID]);
+
+  const riskValue = report ? Math.round(report.final_risk_score * 100) : 0;
+  const riskLevel = report?.risk_level || 'unknown';
+  const confidencePercent = report ? Math.round(report.confidence * 100) : 0;
 
   const chartData = [
     { name: 'Risk', value: riskValue },
     { name: 'Safe', value: 100 - riskValue },
   ];
-  const COLORS = ['#ef4444', '#f3f4f6']; // Red for high risk, gray for rest
+  const riskColors = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444' };
+  const COLORS = [riskColors[riskLevel] || '#6b7280', '#f3f4f6'];
 
-  const categories = [
-    { label: "Eye Contact Score", val: 0.3, color: "bg-red-500" },
-    { label: "Social Response", val: 0.45, color: "bg-orange-500" },
-    { label: "Communication", val: 0.6, color: "bg-yellow-500" },
-    { label: "Behavioral Patterns", val: 0.8, color: "bg-green-500" },
-  ];
+  const categories = report?.category_scores ? Object.entries(report.category_scores).map(([label, val]) => {
+    const v = typeof val === 'number' ? val : 0;
+    return {
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+      val: v,
+      color: v >= 0.7 ? 'bg-red-500' : v >= 0.4 ? 'bg-orange-500' : 'bg-green-500',
+    };
+  }) : [];
+
+  const riskBadge = {
+    low: { bg: 'bg-green-50 border-green-100 text-green-600', text: 'LOW RISK' },
+    medium: { bg: 'bg-amber-50 border-amber-100 text-amber-600', text: 'MEDIUM RISK' },
+    high: { bg: 'bg-red-50 border-red-100 text-red-600', text: 'HIGH RISK' },
+  }[riskLevel] || { bg: 'bg-gray-50 border-gray-200 text-gray-500', text: 'PENDING' };
+
+  if (loading) {
+    return (
+      <div className="flex-1 bg-gray-50 flex flex-col items-center justify-center h-full">
+        <div className="w-16 h-16 border-4 border-teal-200 border-t-[#1A9E7A] rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-medium">Generating your report...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex-1 bg-gray-50 flex flex-col items-center justify-center h-full p-6">
+        <AlertTriangle className="w-12 h-12 text-red-400 mb-4" />
+        <p className="text-red-600 font-bold text-lg mb-2">Report Error</p>
+        <p className="text-gray-500 text-center mb-6">{error}</p>
+        <button onClick={() => onNavigate('home')} className="bg-[#1A9E7A] text-white px-6 py-3 rounded-full font-bold">Go Home</button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 bg-gray-50 flex flex-col h-full overflow-hidden">
@@ -566,18 +785,7 @@ function ResultsScreen({ onNavigate }) {
           <div className="relative w-48 h-48 mb-2">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={90}
-                  startAngle={90}
-                  endAngle={-270}
-                  dataKey="value"
-                  stroke="none"
-                  cornerRadius={10}
-                >
+                <Pie data={chartData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} startAngle={90} endAngle={-270} dataKey="value" stroke="none" cornerRadius={10}>
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
@@ -590,11 +798,15 @@ function ResultsScreen({ onNavigate }) {
             </div>
           </div>
 
-          <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-1.5 rounded-full font-bold text-sm flex items-center gap-2 mb-2">
+          <div className={`${riskBadge.bg} border px-4 py-1.5 rounded-full font-bold text-sm flex items-center gap-2 mb-2`}>
             <AlertTriangle className="w-4 h-4" />
-            HIGH RISK
+            {riskBadge.text}
           </div>
-          <p className="text-gray-500 text-sm font-medium">Confidence Score: <span className="text-gray-900 font-bold">82%</span></p>
+          <p className="text-gray-500 text-sm font-medium">Confidence Score: <span className="text-gray-900 font-bold">{confidencePercent}%</span></p>
+
+          {report?.video_fallback_used && (
+            <p className="text-xs text-amber-600 mt-2 font-medium">⚠ Video not submitted — results based on questionnaire only</p>
+          )}
         </div>
 
         <div className="md:flex-1 md:flex md:flex-col md:w-full">
@@ -603,12 +815,13 @@ function ResultsScreen({ onNavigate }) {
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 text-amber-800">
             <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
             <p className="text-sm font-medium leading-relaxed">
-              This is a risk assessment, NOT a clinical diagnosis. Please share these results with a qualified healthcare professional.
+              {report?.disclaimer || 'This is a risk assessment, NOT a clinical diagnosis. Please share these results with a qualified healthcare professional.'}
             </p>
           </div>
         </div>
 
         {/* Breakdown */}
+        {categories.length > 0 && (
         <div className="px-6 md:px-0 py-4">
           <h3 className="font-bold text-gray-900 mb-4 text-lg md:text-xl">Detailed Breakdown</h3>
           <div className="space-y-5 bg-white p-5 md:p-8 rounded-3xl shadow-sm border border-gray-100">
@@ -625,6 +838,17 @@ function ResultsScreen({ onNavigate }) {
             ))}
           </div>
         </div>
+        )}
+
+        {/* Contribution info */}
+        {report && (
+        <div className="px-6 md:px-0 py-2">
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-2">
+            <p className="text-sm text-gray-600"><span className="font-bold">Video:</span> {report.video_contribution || 'N/A'}</p>
+            <p className="text-sm text-gray-600"><span className="font-bold">Questionnaire:</span> {report.questionnaire_contribution || 'N/A'}</p>
+          </div>
+        </div>
+        )}
         </div>
       </div>
 
@@ -642,6 +866,8 @@ function ResultsScreen({ onNavigate }) {
     </div>
   );
 }
+
+
 
 // ---------------------------------------------------------
 // 5. AI CHATBOT SCREEN
@@ -896,7 +1122,35 @@ function BottomTabBar({ current, onNavigate }) {
 // ---------------------------------------------------------
 // 7. CREATE ACCOUNT SCREEN
 // ---------------------------------------------------------
-function CreateAccountScreen({ onNavigate }) {
+function CreateAccountScreen({ onNavigate, createGuestSession, setAuthToken }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleRegister = async () => {
+    if (!email || !password) { setError('Please fill all fields'); return; }
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.detail || 'Registration failed');
+      }
+      const data = await res.json();
+      setAuthToken(data.access_token);
+      await createGuestSession();
+      onNavigate('home');
+    } catch (err) {
+      setError(err.message);
+    } finally { setLoading(false); }
+  };
+
   return (
     <div className="flex-1 bg-gradient-to-br from-teal-50 to-white relative flex flex-col overflow-y-auto overflow-x-hidden w-full h-full">
       <div className="fixed top-0 left-0 w-full h-1/2 md:w-1/2 md:h-full bg-teal-100/40 rounded-b-[100%] md:rounded-b-none md:rounded-r-[100%] scale-150 -translate-y-1/4 md:translate-y-0 md:scale-110 md:-translate-x-10 origin-top md:origin-left pointer-events-none z-0"></div>
@@ -912,14 +1166,18 @@ function CreateAccountScreen({ onNavigate }) {
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Join AutiSense</h1>
           <p className="text-gray-500 font-medium mb-10 text-center">Start your child's journey today.</p>
           
+          {error && (
+            <div className="w-full bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl mb-4 font-medium">{error}</div>
+          )}
+
           <div className="w-full space-y-4 mb-8">
-            <input type="text" placeholder="Full Name" className="w-full bg-white/80 border border-gray-200 rounded-2xl py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A9E7A] focus:bg-white transition-all shadow-sm" />
-            <input type="email" placeholder="Email address" className="w-full bg-white/80 border border-gray-200 rounded-2xl py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A9E7A] focus:bg-white transition-all shadow-sm" />
-            <input type="password" placeholder="Password" className="w-full bg-white/80 border border-gray-200 rounded-2xl py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A9E7A] focus:bg-white transition-all shadow-sm" />
+            <input type="text" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} className="w-full bg-white/80 border border-gray-200 rounded-2xl py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A9E7A] focus:bg-white transition-all shadow-sm" />
+            <input type="email" placeholder="Email address" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/80 border border-gray-200 rounded-2xl py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A9E7A] focus:bg-white transition-all shadow-sm" />
+            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-white/80 border border-gray-200 rounded-2xl py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1A9E7A] focus:bg-white transition-all shadow-sm" />
           </div>
           
-          <button onClick={() => onNavigate('home')} className="w-full bg-[#1A9E7A] hover:bg-teal-700 text-white font-bold py-4 rounded-full shadow-lg shadow-teal-200 hover:shadow-xl transition-all text-lg mb-4">
-            Register
+          <button onClick={handleRegister} disabled={loading} className="w-full bg-[#1A9E7A] hover:bg-teal-700 text-white font-bold py-4 rounded-full shadow-lg shadow-teal-200 hover:shadow-xl transition-all text-lg mb-4 disabled:opacity-50">
+            {loading ? 'Creating account...' : 'Register'}
           </button>
         </div>
       </div>
