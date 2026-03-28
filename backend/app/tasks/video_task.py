@@ -22,6 +22,7 @@ Error handling:
 import logging
 import traceback
 from pathlib import Path
+from uuid import UUID
 
 from celery import states
 from celery.exceptions import SoftTimeLimitExceeded
@@ -77,10 +78,17 @@ def process_video(self, session_uuid: str) -> dict:
 
     db = SyncSessionLocal()
     try:
+        # ── 0. Convert UUID string to UUID object ───────────────
+        try:
+            session_uuid_obj = UUID(session_uuid) if isinstance(session_uuid, str) else session_uuid
+        except ValueError:
+            logger.error("Invalid UUID format: %s", session_uuid)
+            return {"status": "error", "error": "Invalid UUID format"}
+
         # ── 1. Load session from DB ─────────────────────────────
         result = db.execute(
             select(AssessmentSession).where(
-                AssessmentSession.session_uuid == session_uuid
+                AssessmentSession.session_uuid == session_uuid_obj
             )
         )
         session = result.scalar_one_or_none()
@@ -202,9 +210,10 @@ def _mark_error(db, session_uuid: str, error_msg: str):
     from sqlalchemy import select
 
     try:
+        session_uuid_obj = UUID(session_uuid) if isinstance(session_uuid, str) else session_uuid
         result = db.execute(
             select(AssessmentSession).where(
-                AssessmentSession.session_uuid == session_uuid
+                AssessmentSession.session_uuid == session_uuid_obj
             )
         )
         session = result.scalar_one_or_none()

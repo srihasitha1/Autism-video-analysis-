@@ -59,8 +59,6 @@ def _load_model_and_encoder():
     if _pipeline_ready:
         return _model, _encoder
 
-    import tensorflow as tf
-
     model_path, encoder_path = _resolve_model_paths()
 
     if not os.path.exists(model_path):
@@ -69,7 +67,17 @@ def _load_model_and_encoder():
         raise FileNotFoundError(f"Label encoder not found: {encoder_path}")
 
     logger.info("Loading video model from: %s", Path(model_path).name)
-    _model = tf.keras.models.load_model(model_path)
+
+    # Try tf_keras first (for models saved with older tf_keras builds).
+    # Fall back to standard Keras with compile=False for Keras 3.x compatibility.
+    try:
+        import tf_keras
+        _model = tf_keras.models.load_model(model_path)
+        logger.info("Model loaded via tf_keras compatibility layer")
+    except ImportError:
+        import tensorflow as tf
+        _model = tf.keras.models.load_model(model_path, compile=False)
+        logger.info("Model loaded via standard Keras (compile=False)")
 
     logger.info("Loading label encoder from: %s", Path(encoder_path).name)
     with open(encoder_path, "rb") as f:
@@ -156,13 +164,28 @@ def run_inference(video_path: str) -> dict[str, Any]:
             "The video may be too short, corrupted, or in an unsupported format."
         )
 
-    logger.info("Extracted %d clips, running TTA inference...", len(clips))
+    # Limit clips for reasonable processing time.
+    # A 13-second video produces 99+ clips with sliding window — cap at 10.
+    MAX_CLIPS = 10
+    if len(clips) > MAX_CLIPS:
+        import numpy as np
+        original_count = len(clips)
+        indices = np.linspace(0, len(clips) - 1, MAX_CLIPS, dtype=int)
+        clips = [clips[i] for i in indices]
+        logger.warning(
+            "Clip count limited from %d to %d for performance (evenly sampled)",
+            original_count, MAX_CLIPS,
+        )
+
+    logger.info("Running TTA inference on %d clips...", len(clips))
 
     # ── Predict each clip with TTA ──────────────────────────────
+    # n_augments reduced from 8 to 2 for speed (800 → 20 forward passes)
     all_probs = []
-    for clip in clips:
-        probs = tta_predict(clip, model, n_augments=8)
+    for i, clip in enumerate(clips):
+        probs = tta_predict(clip, model, n_augments=2)
         all_probs.append(probs)
+        logger.debug("Clip %d/%d done", i + 1, len(clips))
 
     # ── Average predictions across clips ────────────────────────
     avg_probs = np.mean(all_probs, axis=0)
