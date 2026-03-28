@@ -1,15 +1,21 @@
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "model"))
+
 import numpy as np
 import tensorflow as tf
 import pickle
 
-from video_loader import extract_clips
+from video_loader import extract_sliding_window_clips
 from tta import tta_predict
 from config import CONFIG
 
 
 def load_model_and_encoder():
-    model = tf.keras.models.load_model("autism_mobilenet_gru_phase1.h5")
-    with open(CONFIG["encoder_save_path"], "rb") as f:
+    model_path = os.path.join(os.path.dirname(__file__), "model", "autism_final.h5")
+    model = tf.keras.models.load_model(model_path)
+    encoder_path = os.path.join(os.path.dirname(__file__), "model", "label_encoder.pkl")
+    with open(encoder_path, "rb") as f:
         encoder = pickle.load(f)
 
     return model, encoder
@@ -20,14 +26,13 @@ def predict_video_score(video_path, model, encoder):
     Takes full video → returns autism score + probabilities
     """
 
-    # 🔹 Extract multiple clips
-    clips = extract_clips(
+    # 🔹 Extract clips via sliding window (50% overlap across full video)
+    clips = extract_sliding_window_clips(
         video_path,
         sequence_length=CONFIG["sequence_length"],
         img_height=CONFIG["img_height"],
         img_width=CONFIG["img_width"],
-        clips_per_video=10,   # increase for better accuracy
-        jitter=False
+        overlap=0.5,
     )
 
     if not clips:
@@ -51,7 +56,7 @@ def predict_video_score(video_path, model, encoder):
     autism_score = (
         0.4 * prob_dict["arm_flapping"] +
         0.3 * prob_dict["spinning"] +
-        0.3 * prob_dict["head_banging"]
+        0.4* prob_dict["head_banging"]
     )
 
     return {

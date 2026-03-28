@@ -136,3 +136,71 @@ def extract_single_clip(
     clips = extract_clips(video_path, sequence_length, img_height, img_width,
                           clips_per_video=1, jitter=False)
     return clips[0] if clips else None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PUBLIC: sliding window inference — best for real-world videos
+# ─────────────────────────────────────────────────────────────────────────────
+
+def extract_sliding_window_clips(
+    video_path:      str,
+    sequence_length: int,
+    img_height:      int,
+    img_width:       int,
+    overlap:         float = 0.5,
+) -> list[np.ndarray]:
+    """
+    Extract overlapping clips across the full video using a sliding window.
+
+    WHY: Training clips were short fixed-length windows from trimmed videos.
+         Real-world videos can be long and mixed-content. A single clip may
+         land on an empty or transitional region and miss the actual behavior.
+         Sliding window ensures every part of the video is evaluated so the
+         final averaged prediction is more robust.
+
+    Args:
+        video_path      : Path to the video file.
+        sequence_length : Number of frames per clip (T).
+        img_height      : Target frame height.
+        img_width       : Target frame width.
+        overlap         : Fraction of overlap between consecutive windows (0–1).
+                          0.5 = 50% overlap is a good default.
+
+    Returns:
+        List of np.ndarray, each (T, H, W, 3). At least 1 clip, even for
+        short videos (falls back to single-clip). Empty list on failure.
+    """
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"  [WARN] Cannot open: {video_path}")
+        return []
+
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+
+    if total < sequence_length:
+        print(f"  [WARN] Too few frames ({total}), falling back to single clip.")
+        return extract_clips(video_path, sequence_length, img_height, img_width,
+                             clips_per_video=1, jitter=False)
+
+    step = max(1, int(sequence_length * (1.0 - overlap)))
+    clips = []
+
+    for seg_start in range(0, total - sequence_length + 1, step):
+        seg_end = seg_start + sequence_length
+        cap = cv2.VideoCapture(video_path)
+        clip = _read_clip_segment(
+            cap, seg_start, seg_end, sequence_length, img_height, img_width,
+            jitter=False,
+        )
+        cap.release()
+        if clip is not None:
+            clips.append(clip)
+
+    if not clips:
+        # Fallback — should not normally happen
+        return extract_clips(video_path, sequence_length, img_height, img_width,
+                             clips_per_video=1, jitter=False)
+
+    return clips
+

@@ -61,7 +61,12 @@ def load_model(path=None):
 
 
 def split_data(X, y, config):
-    """Replicate the exact same train/val/test split as the original trainer.py."""
+    """DEPRECATED: kept for compatibility. build_dataset now splits at video level.
+    
+    This function is no longer used — build_dataset returns pre-split arrays.
+    Retained only to avoid import errors from external scripts.
+    """
+    from sklearn.model_selection import train_test_split
     y_int = np.argmax(y, axis=1)
     X_tr, X_test, y_tr, y_test = train_test_split(
         X, y, test_size=config["test_split"], random_state=42, stratify=y_int)
@@ -581,10 +586,12 @@ def main():
     print("  AUTISM BEHAVIOR DETECTION — 7 Improvements Pipeline")
     print("═" * 65)
 
-    # 1. Build dataset
+    # 1. Build dataset — already split at video level (no data leakage)
     print("\n  Step 0: Building dataset from videos...")
-    X, X_flow, y, le, class_weights = build_dataset(CONFIG)
-    X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y, CONFIG)
+    (X_train, X_val, X_test,
+     X_flow_train, X_flow_val, X_flow_test,
+     y_train, y_val, y_test,
+     le, class_weights) = build_dataset(CONFIG)
     print(f"  Split → Train: {len(X_train)} | Val: {len(X_val)} | Test: {len(X_test)}")
 
     # 2. Verify baseline
