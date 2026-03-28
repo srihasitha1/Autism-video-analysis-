@@ -358,7 +358,7 @@ function VideoAnalysisScreen({ onNavigate, onComplete, sessionUUID }) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('session_uuid', sessionUUID);
-      const uploadRes = await fetch('/api/v1/video/upload', { method: 'POST', body: formData });
+      const uploadRes = await fetch('/api/v1/analyze/video/upload', { method: 'POST', body: formData });
       if (!uploadRes.ok) {
         const d = await uploadRes.json().catch(() => ({}));
         throw new Error(d.detail || 'Upload failed');
@@ -366,7 +366,7 @@ function VideoAnalysisScreen({ onNavigate, onComplete, sessionUUID }) {
       setProgress(40); setStatusMsg('Starting analysis...');
 
       // Step 2: Start analysis
-      const startRes = await fetch('/api/v1/analyze/start', {
+      const startRes = await fetch('/api/v1/analyze/video/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_uuid: sessionUUID }),
@@ -379,11 +379,11 @@ function VideoAnalysisScreen({ onNavigate, onComplete, sessionUUID }) {
 
       // Step 3: Poll status every 2s
       let attempts = 0;
-      const maxAttempts = 60;
+      const maxAttempts = 100;
       const poll = setInterval(async () => {
         attempts++;
         try {
-          const statusRes = await fetch(`/api/v1/analyze/status/${sessionUUID}`);
+          const statusRes = await fetch(`/api/v1/analyze/video/status/${sessionUUID}`);
           const statusData = await statusRes.json();
 
           if (statusData.status === 'video_done') {
@@ -403,7 +403,7 @@ function VideoAnalysisScreen({ onNavigate, onComplete, sessionUUID }) {
           clearInterval(poll);
           setError('Analysis timed out. Please try again.'); setAnalyzing(false);
         }
-      }, 2000);
+      }, 3000);
     } catch (err) {
       setError(err.message); setUploading(false); setAnalyzing(false);
     }
