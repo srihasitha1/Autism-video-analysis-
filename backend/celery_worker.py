@@ -28,9 +28,9 @@ celery_app.conf.update(
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
-    # Safety limits
-    task_soft_time_limit=120,          # 2-minute soft limit
-    task_time_limit=180,               # 3-minute hard kill
+    # Safety limits — driven by config.py, not hardcoded
+    task_soft_time_limit=settings.VIDEO_INFERENCE_SOFT_TIMEOUT,
+    task_time_limit=settings.VIDEO_INFERENCE_HARD_TIMEOUT,
     worker_max_tasks_per_child=50,     # restart worker every 50 tasks (memory safety)
 )
 

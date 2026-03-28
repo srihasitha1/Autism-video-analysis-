@@ -44,13 +44,13 @@ class Settings(BaseSettings):
     MIN_VIDEO_DURATION_SECONDS: int = 1
 
     # ── ML model paths ──────────────────────────────────────────
-    MODEL_VIDEO_PATH: str = "ml_models/video_model/mobilenet_gru.h5"
+    MODEL_VIDEO_PATH: str = "../model/autism_final.h5"
     MODEL_ENCODER_PATH: str = "ml_models/video_model/label_encoder.pkl"
-    MODEL_RF_PATH: str = "ml_models/questionnaire_model/questionnaire_rf.pkl"
+    MODEL_RF_PATH: str = "ml_models/questionnaire_model/autism_model.pkl"
 
     # ── Video inference timeouts ─────────────────────────────────
-    VIDEO_INFERENCE_SOFT_TIMEOUT: int = 120   # seconds — Celery soft limit
-    VIDEO_INFERENCE_HARD_TIMEOUT: int = 180   # seconds — Celery hard kill
+    VIDEO_INFERENCE_SOFT_TIMEOUT: int = 300   # seconds — Celery soft limit (5 min)
+    VIDEO_INFERENCE_HARD_TIMEOUT: int = 600   # seconds — Celery hard kill (10 min)
 
     # ── CORS ────────────────────────────────────────────────────
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
