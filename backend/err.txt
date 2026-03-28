@@ -1,0 +1,51 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.4, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\lenovo\Desktop\autism screening system\Autism-video-analysis-\backend\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: c:\Users\lenovo\Desktop\autism screening system\Autism-video-analysis-\backend
+configfile: pyproject.toml
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 40 items
+
+tests/test_auth.py::test_register_success PASSED                         [  2%]
+tests/test_auth.py::test_register_weak_password_no_uppercase PASSED      [  5%]
+tests/test_auth.py::test_register_weak_password_no_number PASSED         [  7%]
+tests/test_auth.py::test_register_weak_password_too_short PASSED         [ 10%]
+tests/test_auth.py::test_register_duplicate_email PASSED                 [ 12%]
+tests/test_auth.py::test_login_success PASSED                            [ 15%]
+tests/test_auth.py::test_login_wrong_password PASSED                     [ 17%]
+tests/test_auth.py::test_login_nonexistent_email PASSED                  [ 20%]
+tests/test_auth.py::test_create_guest_session PASSED                     [ 22%]
+tests/test_auth.py::test_get_session_status PASSED                       [ 25%]
+tests/test_auth.py::test_get_session_not_found PASSED                    [ 27%]
+tests/test_auth.py::test_delete_session PASSED                           [ 30%]
+tests/test_auth.py::test_delete_session_not_found PASSED                 [ 32%]
+tests/test_auth.py::test_auth_errors_are_identical PASSED                [ 35%]
+tests/test_health.py::test_health_returns_200 PASSED                     [ 37%]
+tests/test_health.py::test_ping_returns_pong PASSED                      [ 40%]
+tests/test_health.py::test_security_headers_present PASSED               [ 42%]
+tests/test_health.py::test_server_header_removed PASSED                  [ 45%]
+tests/test_health.py::test_nonexistent_route_returns_404 PASSED          [ 47%]
+tests/test_video.py::test_upload_valid_mp4 PASSED                        [ 50%]
+tests/test_video.py::test_upload_valid_avi PASSED                        [ 52%]
+tests/test_video.py::test_upload_valid_webm PASSED                       [ 55%]
+tests/test_video.py::test_upload_bad_extension PASSED                    [ 57%]
+tests/test_video.py::test_upload_no_extension PASSED                     [ 60%]
+tests/test_video.py::test_upload_bad_magic_bytes PASSED                  [ 62%]
+tests/test_video.py::test_upload_too_small_file PASSED                   [ 65%]
+tests/test_video.py::test_upload_missing_session PASSED                  [ 67%]
+tests/test_video.py::test_upload_invalid_uuid_format PASSED              [ 70%]
+tests/test_video.py::test_upload_updates_session_status PASSED           [ 72%]
+tests/test_video.py::test_reupload_allowed PASSED                        [ 75%]
+tests/test_video.py::test_delete_video_success PASSED                    [ 77%]
+tests/test_video.py::test_delete_video_no_files PASSED                   [ 80%]
+tests/test_video.py::test_delete_video_nonexistent_session PASSED        [ 82%]
+tests/test_video.py::test_validate_extension_valid PASSED                [ 85%]
+tests/test_video.py::test_validate_extension_invalid PASSED              [ 87%]
+tests/test_video.py::test_validate_magic_bytes_valid PASSED              [ 90%]
+tests/test_video.py::test_validate_magic_bytes_invalid PASSED            [ 92%]
+tests/test_video.py::test_validate_file_size PASSED                      [ 95%]
+tests/test_video.py::test_anonymize_uuid PASSED                          [ 97%]
+tests/test_video.py::test_cleanup_nonexistent_session PASSED             [100%]
+
+============================= 40 passed in 2.17s ==============================

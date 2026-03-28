@@ -1,0 +1,47 @@
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Environment ────────────────────────────────────────
+.env
+!.env.example
+.venv/
+venv/
+env/
+
+# ── IDE ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── ML model weights (large files) ────────────────────
+ml_models/video_model/*.h5
+ml_models/video_model/*.keras
+ml_models/questionnaire_model/*.pkl
+ml_models/questionnaire_model/*.joblib
+
+# ── Temp files ─────────────────────────────────────────
+/tmp/
+*.mp4
+*.mov
+*.avi
+*.webm
+
+# ── Testing ────────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ── Docker ─────────────────────────────────────────────
+postgres_data/

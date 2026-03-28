@@ -1,0 +1,57 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.11.4, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\lenovo\Desktop\autism screening system\Autism-video-analysis-\backend\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\lenovo\Desktop\autism screening system\Autism-video-analysis-\backend
+configfile: pyproject.toml
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 24 items
+
+tests/test_video_inference.py::test_start_analysis_success FAILED        [  4%]
+tests/test_video_inference.py::test_start_analysis_session_not_found PASSED [  8%]
+tests/test_video_inference.py::test_start_analysis_wrong_status_pending PASSED [ 12%]
+tests/test_video_inference.py::test_start_analysis_already_processing PASSED [ 16%]
+tests/test_video_inference.py::test_start_analysis_already_done PASSED   [ 20%]
+tests/test_video_inference.py::test_start_analysis_video_file_missing PASSED [ 25%]
+tests/test_video_inference.py::test_start_analysis_retry_after_error FAILED [ 29%]
+tests/test_video_inference.py::test_status_session_not_found PASSED      [ 33%]
+tests/test_video_inference.py::test_status_pending PASSED                [ 37%]
+tests/test_video_inference.py::test_status_processing PASSED             [ 41%]
+tests/test_video_inference.py::test_status_done_with_results PASSED      [ 45%]
+tests/test_video_inference.py::test_status_error_with_message PASSED     [ 50%]
+tests/test_video_inference.py::test_classify_risk_low PASSED             [ 54%]
+tests/test_video_inference.py::test_classify_risk_moderate PASSED        [ 58%]
+tests/test_video_inference.py::test_classify_risk_high PASSED            [ 62%]
+tests/test_video_inference.py::test_score_to_confidence PASSED           [ 66%]
+tests/test_video_inference.py::test_classify_risk_boundaries PASSED      [ 70%]
+tests/test_video_inference.py::test_find_video_file_exists PASSED        [ 75%]
+tests/test_video_inference.py::test_find_video_file_missing PASSED       [ 79%]
+tests/test_video_inference.py::test_find_video_file_wrong_name PASSED    [ 83%]
+tests/test_video_inference.py::test_video_status_response_schema PASSED  [ 87%]
+tests/test_video_inference.py::test_video_start_response_schema PASSED   [ 91%]
+tests/test_video_inference.py::test_video_status_response_with_results PASSED [ 95%]
+tests/test_video_inference.py::test_video_status_response_with_error PASSED [100%]
+
+================================== FAILURES ===================================
+_________________________ test_start_analysis_success _________________________
+tests\test_video_inference.py:86: in test_start_analysis_success
+    with patch("app.routers.video.process_video") as mock_task:
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1443: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1416: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'app.routers.video' from 'C:\\Users\\lenovo\\Desktop\\autism screening system\\Autism-video-analysis-\\backend\\app\\routers\\video.py'> does not have the attribute 'process_video'
+____________________ test_start_analysis_retry_after_error ____________________
+tests\test_video_inference.py:195: in test_start_analysis_retry_after_error
+    with patch("app.routers.video.process_video") as mock_task:
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1443: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+..\..\..\..\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1416: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'app.routers.video' from 'C:\\Users\\lenovo\\Desktop\\autism screening system\\Autism-video-analysis-\\backend\\app\\routers\\video.py'> does not have the attribute 'process_video'
+=========================== short test summary info ===========================
+FAILED tests/test_video_inference.py::test_start_analysis_success - Attribute...
+FAILED tests/test_video_inference.py::test_start_analysis_retry_after_error
+======================== 2 failed, 22 passed in 0.86s =========================

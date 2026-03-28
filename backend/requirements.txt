@@ -1,0 +1,53 @@
+# ==============================================================
+# AutiSense Backend — Python Dependencies
+# ==============================================================
+
+# ── Web framework ──────────────────────────────────────────────
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+
+# ── Database (async PostgreSQL) ────────────────────────────────
+sqlalchemy[asyncio]==2.0.40
+asyncpg==0.30.0
+alembic==1.15.2
+psycopg2-binary==2.9.10
+
+# ── Pydantic & validation ─────────────────────────────────────
+pydantic==2.11.3
+pydantic-settings==2.9.1
+
+# ── Auth (JWT + password hashing) ──────────────────────────────
+python-jose[cryptography]==3.4.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1                      # passlib is incompatible with bcrypt>=4.1
+cryptography==44.0.3
+email-validator==2.2.0
+
+# ── File uploads ───────────────────────────────────────────────
+python-multipart==0.0.20
+
+# ── Async task queue ───────────────────────────────────────────
+celery==5.5.2
+redis==6.2.0
+
+# ── HTTP client (for external APIs) ───────────────────────────
+httpx==0.28.1
+
+# ── Rate limiting ──────────────────────────────────────────────
+slowapi==0.1.9
+
+# ── ML: Video model (TensorFlow + OpenCV) ─────────────────────
+tensorflow==2.19.0
+opencv-python-headless==4.11.0.86
+numpy==2.2.5
+
+# ── ML: Questionnaire model (scikit-learn) ────────────────────
+scikit-learn==1.7.0
+joblib==1.5.1
+pandas==2.2.3
+
+# ── LLM Chatbot ───────────────────────────────────────────────
+groq==0.25.0
+
+# ── Scheduling (stale video cleanup) ──────────────────────────
+apscheduler==3.11.0

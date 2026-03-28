@@ -1,0 +1,84 @@
+# ==============================================================
+# AutiSense — Local Development Stack
+# ==============================================================
+# Usage:
+#   docker-compose up        → start all services
+#   docker-compose up -d     → start detached
+#   docker-compose down -v   → stop and remove volumes
+
+version: "3.9"
+
+services:
+  # ── FastAPI application ────────────────────────────────
+  api:
+    build: .
+    container_name: autisense-api
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - .:/app          # hot-reload in dev
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0 --port 8000
+      --reload
+
+  # ── Celery worker (async video processing) ─────────────
+  celery_worker:
+    build: .
+    container_name: autisense-celery-worker
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: >
+      celery -A celery_worker.celery_app worker
+      --loglevel=info --concurrency=2
+
+  # ── Celery beat (scheduled tasks) ──────────────────────
+  celery_beat:
+    build: .
+    container_name: autisense-celery-beat
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_started
+    command: >
+      celery -A celery_worker.celery_app beat
+      --loglevel=info
+
+  # ── PostgreSQL database ────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: autisense-db
+    environment:
+      POSTGRES_DB: autisense
+      POSTGRES_USER: autisense
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autisense"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (Celery broker + result backend) ─────────────
+  redis:
+    image: redis:7-alpine
+    container_name: autisense-redis
+    ports:
+      - "6379:6379"
+    command: redis-server
+
+volumes:
+  postgres_data:

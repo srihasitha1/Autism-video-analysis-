@@ -1,0 +1,11 @@
+# ==============================================================
+# AutiSense Backend — Dev / Test Dependencies
+# ==============================================================
+
+-r requirements.txt
+
+pytest==8.3.5
+pytest-asyncio==0.26.0
+httpx==0.28.1
+factory-boy==3.3.3
+faker==37.3.0
