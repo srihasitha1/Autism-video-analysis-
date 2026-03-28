@@ -1,0 +1,42 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.4, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\lenovo\Desktop\autism screening system\Autism-video-analysis-\backend\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\lenovo\Desktop\autism screening system\Autism-video-analysis-\backend
+configfile: pyproject.toml
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 29 items
+
+tests/test_questionnaire.py::test_get_questions_returns_40 PASSED        [  3%]
+tests/test_questionnaire.py::test_get_questions_has_scale PASSED         [  6%]
+tests/test_questionnaire.py::test_get_questions_has_disclaimer PASSED    [ 10%]
+tests/test_questionnaire.py::test_get_questions_section_structure PASSED [ 13%]
+tests/test_questionnaire.py::test_score_wrong_response_count_39 PASSED   [ 17%]
+tests/test_questionnaire.py::test_score_wrong_response_count_41 PASSED   [ 20%]
+tests/test_questionnaire.py::test_score_out_of_range_negative PASSED     [ 24%]
+tests/test_questionnaire.py::test_score_out_of_range_5 PASSED            [ 27%]
+tests/test_questionnaire.py::test_score_invalid_age_too_low PASSED       [ 31%]
+tests/test_questionnaire.py::test_score_invalid_age_too_high PASSED      [ 34%]
+tests/test_questionnaire.py::test_score_invalid_gender PASSED            [ 37%]
+tests/test_questionnaire.py::test_score_session_not_found PASSED         [ 41%]
+tests/test_questionnaire.py::test_score_success_with_mock_model PASSED   [ 44%]
+tests/test_questionnaire.py::test_score_all_zeros_low_risk PASSED        [ 48%]
+tests/test_questionnaire.py::test_score_all_fours_high_risk PASSED       [ 51%]
+tests/test_questionnaire.py::test_score_without_model_fallback PASSED    [ 55%]
+tests/test_questionnaire.py::test_score_updates_session_status PASSED    [ 58%]
+tests/test_questionnaire.py::test_score_stores_child_info PASSED         [ 62%]
+tests/test_questionnaire.py::test_score_idempotent_resubmission PASSED   [ 65%]
+tests/test_questionnaire.py::test_score_category_scores_present PASSED   [ 68%]
+tests/test_questionnaire.py::test_score_optional_gender PASSED           [ 72%]
+tests/test_questionnaire.py::test_invert_responses PASSED                [ 75%]
+tests/test_questionnaire.py::test_classify_risk_boundaries PASSED        [ 79%]
+tests/test_questionnaire.py::test_encode_gender PASSED                   [ 82%]
+tests/test_questionnaire.py::test_compute_category_scores PASSED         [ 86%]
+tests/test_questionnaire.py::test_score_questionnaire_deterministic PASSED [ 89%]
+tests/test_questionnaire.py::test_questionnaire_response_schema PASSED   [ 93%]
+tests/test_questionnaire.py::test_questionnaire_request_rejects_empty_responses PASSED [ 96%]
+tests/test_questionnaire.py::test_questionnaire_request_rejects_non_int PASSED [100%]
+
+============================= 29 passed in 0.62s ==============================
+
+---STDERR---

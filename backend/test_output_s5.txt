@@ -1,0 +1,20 @@
+﻿python : C:\Users\lenovo\A
+ppData\Local\Programs\Pyth
+on\Python311\python.exe: 
+No module named pytest
+At line:1 char:1
++ python -m pytest tests/t
+est_questionnaire.py -v 
+--tb=short 2>&1 | Out ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (C  
+  :\Users\lenovo...le n   
+ amed pytest:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 

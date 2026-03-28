@@ -109,13 +109,15 @@ def create_app() -> FastAPI:
     # ── Include routers ────────────────────────────────────────
     from app.routers.auth import router as auth_router, session_router
     from app.routers.video import router as video_router
+    from app.routers.questionnaire import router as questionnaire_router
 
     application.include_router(auth_router, prefix="/api/v1")
     application.include_router(session_router, prefix="/api/v1")
     application.include_router(video_router, prefix="/api/v1")
+    application.include_router(questionnaire_router, prefix="/api/v1")
 
     # Future sprint routers:
-    # from app.routers import questionnaire, fusion, chatbot, clinics
+    # from app.routers import fusion, chatbot, clinics
     # ...
 
     return application
