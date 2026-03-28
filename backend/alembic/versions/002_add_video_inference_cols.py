@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # Revision identifiers
 revision = "002_add_video_inference_cols"
-down_revision = None  # Set to actual 001 revision ID if it exists
+down_revision = '001_initial_tables'
 branch_labels = None
 depends_on = None
 

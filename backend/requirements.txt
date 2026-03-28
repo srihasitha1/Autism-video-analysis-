@@ -15,6 +15,7 @@ psycopg2-binary==2.9.10
 # ── Pydantic & validation ─────────────────────────────────────
 pydantic==2.11.3
 pydantic-settings==2.9.1
+python-dotenv==1.1.0
 
 # ── Auth (JWT + password hashing) ──────────────────────────────
 python-jose[cryptography]==3.4.0
@@ -38,6 +39,7 @@ slowapi==0.1.9
 
 # ── ML: Video model (TensorFlow + OpenCV) ─────────────────────
 tensorflow==2.19.0
+tf_keras==2.19.0
 opencv-python-headless==4.11.0.86
 numpy==2.2.5
 
